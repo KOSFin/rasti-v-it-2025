@@ -32,4 +32,4 @@ python manage.py collectstatic --noinput
 
 # Запускаем сервер
 echo "Starting server..."
-gunicorn Backend.wsgi:application --bind 0.0.0.0:8000 --workers 4
+gunicorn Backend.wsgi:application --bind 0.0.0.0:9000 --workers 4
