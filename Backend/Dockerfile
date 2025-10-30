@@ -28,7 +28,7 @@ RUN mkdir -p /app/staticfiles
 RUN python manage.py collectstatic --noinput || true
 
 # Открываем порт
-EXPOSE 8000
+EXPOSE 9000
 
 # Скрипт запуска
 COPY entrypoint.sh /entrypoint.sh
