@@ -40,7 +40,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # Отключаем CSRF для API
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -152,14 +152,39 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS settings
-# Make CORS permissive so browsers and clients are not blocked.
-# This enables all origins by default; can be toggled with the
-# environment variable CORS_ALLOW_ALL_ORIGINS (set to 'False' to disable).
-from corsheaders.defaults import default_headers, default_methods
-
-CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
+# CORS settings - разрешаем все
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-# Allow the default set of headers and methods (keeps it permissive)
-CORS_ALLOW_HEADERS = list(default_headers)
-CORS_ALLOW_METHODS = list(default_methods)
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Дополнительные настройки для CORS
+CSRF_TRUSTED_ORIGINS = [
+    'https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me',
+    'https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me',
+    'http://localhost',
+    'http://127.0.0.1',
+]
+
+# Отключаем некоторые security проверки для работы через прокси
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
