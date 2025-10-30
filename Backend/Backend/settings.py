@@ -49,10 +49,11 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',  # Отключаем CSRF для API
+    'django.middleware.csrf.CsrfViewMiddleware',  # Re-enabling CSRF for additional security
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.common.BrokenLinkEmailsMiddleware',  # For monitoring potential attacks
 ]
 
 ROOT_URLCONF = 'Backend.urls'
