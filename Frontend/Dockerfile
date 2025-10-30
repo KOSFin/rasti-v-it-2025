@@ -2,7 +2,7 @@
 FROM node:18-alpine AS builder
 
 # Аргумент для API URL
-ARG VITE_API_URL=https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me
+ARG VITE_API_URL=https://api.hak-rosti-v-it.ruka.me
 
 WORKDIR /app
 
