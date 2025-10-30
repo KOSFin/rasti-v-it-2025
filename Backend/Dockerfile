@@ -5,17 +5,20 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     build-essential \
     libpq-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файл зависимостей
 COPY requirements.txt .
 
 # Устанавливаем Python зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+# Upgrade packaging tools first (helps building wheels) then install requirements
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Копируем код приложения
 COPY . .
