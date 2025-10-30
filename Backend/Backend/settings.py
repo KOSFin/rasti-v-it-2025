@@ -20,7 +20,7 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 if ALLOWED_HOSTS == ['*']:
     ALLOWED_HOSTS = [
         '*',
-        'api.hak-rosti-v-it.ruka.me',
+        'api-hak-rosti-v-it.ruka.me',
         'hak-rosti-v-it.ruka.me',
         'localhost',
         '127.0.0.1',
@@ -168,7 +168,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Явно указываем разрешенные origins для production
 CORS_ALLOWED_ORIGINS = [
     'https://hak-rosti-v-it.ruka.me',
-    'https://api.hak-rosti-v-it.ruka.me',
+    'https://api-hak-rosti-v-it.ruka.me',
     'https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me',
     'https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me',
     'http://localhost:5173',
@@ -202,7 +202,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me',
     'https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me',
     'https://hak-rosti-v-it.ruka.me',
-    'https://api.hak-rosti-v-it.ruka.me',
+    'https://api-hak-rosti-v-it.ruka.me',
     'http://localhost',
     'http://127.0.0.1',
 ]
