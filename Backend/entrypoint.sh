@@ -18,10 +18,28 @@ python manage.py migrate
 echo "Creating superuser..."
 python manage.py shell << END
 from django.contrib.auth import get_user_model
+from api.models import Employee, Department
+
 User = get_user_model()
 if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@example.com', 'admin')
-    print('Superuser created.')
+    # Создаем суперпользователя
+    admin_user = User.objects.create_superuser('admin', 'admin@example.com', 'admin')
+    
+    # Создаем отдел по умолчанию, если не существует
+    default_dept, created = Department.objects.get_or_create(
+        name='Администрирование',
+        defaults={'description': 'Отдел администрирования системы'}
+    )
+    
+    # Создаем профиль сотрудника для суперпользователя
+    Employee.objects.create(
+        user=admin_user,
+        department=default_dept,
+        position='Администратор',
+        is_manager=True,
+        hire_date='2025-01-01'
+    )
+    print('Superuser and employee profile created.')
 else:
     print('Superuser already exists.')
 END
