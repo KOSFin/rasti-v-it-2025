@@ -19,12 +19,12 @@ services:
 
   backend:
     build: .
-    command: gunicorn Backend.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    command: gunicorn Backend.wsgi:application --bind 0.0.0.0:9000 --workers 4
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
     ports:
-      - "8000:8000"
+      - "9000:9000"
     environment:
       DEBUG: "False"
       SECRET_KEY: "your-secret-key-change-in-production"
