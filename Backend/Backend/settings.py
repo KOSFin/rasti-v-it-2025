@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -9,12 +10,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-79n3trg54fp5tyd3lgrk%0e(t4&vq60_0emxy#q%kbktm1()xx'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-79n3trg54fp5tyd3lgrk%0e(t4&vq60_0emxy#q%kbktm1()xx')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 
 # Application definition
@@ -27,7 +28,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',
     'corsheaders',
+    'django_filters',
 
     'api',
 ]
@@ -35,6 +38,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -68,11 +72,11 @@ WSGI_APPLICATION = 'Backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'wink_db',
-        'USER': 'postgres',
-        'PASSWORD': '0000',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME', 'rasti_db'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
+        'HOST': os.environ.get('DB_HOST', 'db'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -126,11 +130,28 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# CORS settings
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOW_CREDENTIALS = True

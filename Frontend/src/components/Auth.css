@@ -1,0 +1,101 @@
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.auth-card {
+  background: white;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-card h1 {
+  color: #667eea;
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 28px;
+}
+
+.auth-card h2 {
+  color: #333;
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #555;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.error-message {
+  background-color: #fee;
+  color: #c33;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.success-message {
+  background-color: #efe;
+  color: #3c3;
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

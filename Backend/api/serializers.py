@@ -1,9 +1,30 @@
 from rest_framework import serializers
+from django.contrib.auth.models import User
 from .models import *
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+
+class DepartmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Department
+        fields = '__all__'
 
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.CharField(source='user.email', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    
+    class Meta:
+        model = Employee
+        fields = '__all__'
+
+class EmployeeDetailSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    department = DepartmentSerializer(read_only=True)
     
     class Meta:
         model = Employee
