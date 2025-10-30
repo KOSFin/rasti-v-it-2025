@@ -22,8 +22,8 @@ services:
       DB_PASSWORD: postgres
       DB_HOST: db
       DB_PORT: 5432
-      ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
-      CORS_ALLOWED_ORIGINS: "http://localhost,http://127.0.0.1,https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,backend,rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me"
+      CORS_ALLOWED_ORIGINS: "http://localhost,http://127.0.0.1,https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me,https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me"
     depends_on:
       db:
         condition: service_healthy
