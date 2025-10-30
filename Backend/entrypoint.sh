@@ -2,8 +2,10 @@
 
 # Ожидаем готовности БД
 echo "Waiting for PostgreSQL..."
-while ! nc -z $DB_HOST $DB_PORT; do
-  sleep 0.1
+# Retry until the DB host/port is reachable. Silence nc stderr to avoid DNS error spam
+until nc -z "$DB_HOST" "$DB_PORT" >/dev/null 2>&1; do
+  echo "  waiting for $DB_HOST:$DB_PORT..."
+  sleep 0.5
 done
 echo "PostgreSQL started"
 
