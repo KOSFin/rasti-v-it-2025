@@ -7,6 +7,7 @@ WORKDIR /app
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
     postgresql-client \
+    netcat-openbsd \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
