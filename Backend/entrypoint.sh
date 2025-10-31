@@ -11,8 +11,14 @@ echo "PostgreSQL started"
 
 # Применяем миграции
 echo "Applying database migrations..."
-python manage.py makemigrations
 python manage.py migrate
+
+# Опционально очищаем базу данных для свежего старта
+if [ "${RESET_DB:-0}" = "1" ]; then
+    echo "RESET_DB=1 — очищаем базу данных..."
+    python manage.py flush --noinput
+    python manage.py migrate
+fi
 
 # Создаем суперпользователя, если не существует
 echo "Creating superuser..."
@@ -21,27 +27,38 @@ from django.contrib.auth import get_user_model
 from api.models import Employee, Department
 
 User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    # Создаем суперпользователя
-    admin_user = User.objects.create_superuser('admin', 'admin@example.com', 'admin')
-    
-    # Создаем отдел по умолчанию, если не существует
-    default_dept, created = Department.objects.get_or_create(
-        name='Администрирование',
-        defaults={'description': 'Отдел администрирования системы'}
-    )
-    
-    # Создаем профиль сотрудника для суперпользователя
-    Employee.objects.create(
-        user=admin_user,
-        department=default_dept,
-        position='Администратор',
-        is_manager=True,
-        hire_date='2025-01-01'
-    )
-    print('Superuser and employee profile created.')
-else:
-    print('Superuser already exists.')
+admin_user, created = User.objects.get_or_create(
+    username='admin',
+    defaults={'email': 'admin@example.com', 'is_staff': True, 'is_superuser': True}
+)
+
+admin_user.email = admin_user.email or 'admin@example.com'
+if not admin_user.is_staff or not admin_user.is_superuser:
+    admin_user.is_staff = True
+    admin_user.is_superuser = True
+
+admin_user.first_name = admin_user.first_name or 'Админ'
+admin_user.last_name = admin_user.last_name or 'Системы'
+admin_user.set_password('admin')
+admin_user.save()
+
+# Создаем отдел по умолчанию, если не существует
+default_dept, _ = Department.objects.get_or_create(
+    name='Администрирование',
+    defaults={'description': 'Отдел администрирования системы'}
+)
+
+Employee.objects.update_or_create(
+    user=admin_user,
+    defaults={
+        'department': default_dept,
+        'position': 'Администратор',
+        'is_manager': True,
+        'hire_date': '2025-01-01'
+    }
+)
+
+print('Суперпользователь admin/admin активен и синхронизирован.')
 END
 
 # Собираем статические файлы

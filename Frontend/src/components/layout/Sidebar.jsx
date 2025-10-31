@@ -18,7 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import './Sidebar.css';
 
 const Sidebar = () => {
-  const { employee } = useAuth();
+  const { employee, user } = useAuth();
   const [goals, setGoals] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -139,6 +139,10 @@ const Sidebar = () => {
     { path: '/feedback-360', icon: FiUsers, label: 'Оценка 360°' },
     { path: '/nine-box', icon: FiGrid, label: 'Nine Box' },
   ];
+
+  if (user?.is_superuser) {
+    navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
+  }
 
   if (isManager) {
     navItems.splice(1, 0, { path: '/team', icon: FiUserPlus, label: 'Команда' });

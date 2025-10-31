@@ -13,6 +13,9 @@ export const logout = (refreshToken) =>
 export const getCurrentUser = () => 
   api.get('/api/auth/me/');
 
+export const adminCreateEmployee = (payload) =>
+  api.post('/api/auth/admin/create-employee/', payload);
+
 // Departments
 export const getDepartments = () => 
   api.get('/api/departments/');

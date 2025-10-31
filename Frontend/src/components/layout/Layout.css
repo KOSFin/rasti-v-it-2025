@@ -18,6 +18,14 @@
   padding: 24px;
 }
 
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
   .main-content {

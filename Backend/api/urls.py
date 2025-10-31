@@ -23,5 +23,6 @@ urlpatterns = [
     path('api/auth/login/', auth_views.login, name='login'),
     path('api/auth/logout/', auth_views.logout, name='logout'),
     path('api/auth/me/', auth_views.current_user, name='current_user'),
+    path('api/auth/admin/create-employee/', auth_views.admin_create_employee, name='admin_create_employee'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

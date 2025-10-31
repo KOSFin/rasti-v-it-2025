@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiUser, FiLock, FiLogIn, FiMoon, FiSun } from 'react-icons/fi';
+import { FiLogIn, FiLock, FiMoon, FiShield, FiSun, FiUser } from 'react-icons/fi';
 import { login } from '../api/services';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,27 +10,22 @@ function Login() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { refreshProfile } = useAuth();
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-  });
+  const [formState, setFormState] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await login(formData.username, formData.password);
+      const response = await login(formState.username, formState.password);
       localStorage.setItem('access_token', response.data.access);
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
@@ -45,77 +40,80 @@ function Login() {
   };
 
   return (
-    <div className="auth-container">
-      <button onClick={toggleTheme} className="theme-toggle-login">
-        {theme === 'dark' ? <FiSun size={20} /> : <FiMoon size={20} />}
+    <div className="auth-page">
+      <div className="auth-spotlight" />
+      <button type="button" className="auth-theme-toggle" onClick={toggleTheme}>
+        {theme === 'dark' ? <FiSun size={18} /> : <FiMoon size={18} />}
       </button>
-      
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1 className="auth-logo">РАСТИ В ИТ</h1>
-          <p className="auth-subtitle">Система оценки эффективности</p>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label className="form-label">
-              <FiUser size={16} />
-              <span>Имя пользователя</span>
-            </label>
-            <input
-              type="text"
-              name="username"
-              className="form-input"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Введите имя пользователя"
-              required
-              disabled={loading}
-              autoFocus
-            />
+
+      <div className="auth-shell">
+        <header className="auth-brand">
+          <div className="brand-mark">RV</div>
+          <div className="brand-meta">
+            <span className="brand-name">РАСТИ В ИТ</span>
+            <span className="brand-tag">платформа оценки и развития</span>
           </div>
-          
-          <div className="form-group">
-            <label className="form-label">
-              <FiLock size={16} />
-              <span>Пароль</span>
-            </label>
-            <input
-              type="password"
-              name="password"
-              className="form-input"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Введите пароль"
-              required
-              disabled={loading}
-            />
-          </div>
-          
-          {error && (
-            <div className="error-message">
-              <span>{error}</span>
+        </header>
+
+        <main className="auth-panel">
+          <header className="auth-header">
+            <FiShield size={18} />
+            <div>
+              <h1>Вход в личный кабинет</h1>
+              <p>Используйте корпоративные учетные данные для доступа к платформе.</p>
             </div>
-          )}
-          
-          <button type="submit" disabled={loading} className="btn-login">
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                <span>Вход...</span>
-              </>
-            ) : (
-              <>
-                <FiLogIn size={20} />
-                <span>Войти</span>
-              </>
-            )}
-          </button>
-        </form>
-        
-        <div className="auth-footer">
-          <p>Используйте свои корпоративные учетные данные</p>
-        </div>
+          </header>
+
+          {error && <div className="auth-banner error">{error}</div>}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label className="auth-field">
+              <span>
+                <FiUser size={16} /> Имя пользователя
+              </span>
+              <input
+                name="username"
+                value={formState.username}
+                onChange={handleChange}
+                placeholder="admin"
+                required
+                disabled={loading}
+                autoFocus
+              />
+            </label>
+
+            <label className="auth-field">
+              <span>
+                <FiLock size={16} /> Пароль
+              </span>
+              <input
+                type="password"
+                name="password"
+                value={formState.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                required
+                disabled={loading}
+              />
+            </label>
+
+            <button type="submit" className="auth-submit" disabled={loading}>
+              {loading ? 'Проверяем…' : (
+                <>
+                  <FiLogIn size={18} />
+                  <span>Войти</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <footer className="auth-footer">
+            <p>
+              Базовая учетная запись администратора: <strong>admin / admin</strong>. После входа создайте
+              личные профили сотрудников в разделе «Сотрудники».
+            </p>
+          </footer>
+        </main>
       </div>
     </div>
   );

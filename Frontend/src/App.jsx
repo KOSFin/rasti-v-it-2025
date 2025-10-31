@@ -9,9 +9,10 @@ import Tasks from './components/Tasks';
 import SelfAssessment from './components/SelfAssessment';
 import Feedback360 from './components/Feedback360';
 import NineBox from './components/NineBox';
+import AdminUsers from './components/AdminUsers';
 import './App.css';
 
-function PrivateRoute({ children }) {
+function PrivateRoute({ children, requireAdmin = false }) {
   const { user, loading } = useAuth();
   const token = localStorage.getItem('access_token');
 
@@ -30,6 +31,10 @@ function PrivateRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (requireAdmin && !user.is_superuser) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -87,6 +92,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <NineBox />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <PrivateRoute requireAdmin>
+                  <AdminUsers />
                 </PrivateRoute>
               }
             />

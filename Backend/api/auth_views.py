@@ -1,12 +1,22 @@
+from datetime import datetime
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.contrib.auth.models import User
+from rest_framework.response import Response
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from django.utils import timezone
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Employee
-from .serializers import EmployeeSerializer, UserSerializer
+
+from .models import Department, Employee
+from .serializers import (
+    AdminEmployeeCreateSerializer,
+    EmployeeDetailSerializer,
+    EmployeeSerializer,
+    UserSerializer,
+)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -47,7 +57,45 @@ def register(request):
             'hire_date': request.data.get('hire_date'),
         }
         
-        Employee.objects.create(user=user, **employee_data)
+        department_id = request.data.get('department')
+        department = None
+        if department_id:
+            try:
+                department = Department.objects.get(pk=department_id)
+            except Department.DoesNotExist:
+                return Response(
+                    {'error': 'Указанного отдела не существует'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        hire_date_raw = request.data.get('hire_date')
+        if hire_date_raw:
+            try:
+                hire_date = datetime.fromisoformat(hire_date_raw).date()
+            except ValueError:
+                return Response(
+                    {'error': 'Неверный формат даты приема. Используйте YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            hire_date = timezone.now().date()
+
+        def to_bool(value, default=False):
+            if value is None:
+                return default
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().lower() in ['1', 'true', 'yes', 'on']
+            return bool(value)
+
+        Employee.objects.create(
+            user=user,
+            department=department,
+            position=request.data.get('position', 'Сотрудник'),
+            is_manager=to_bool(request.data.get('is_manager'), False),
+            hire_date=hire_date,
+        )
         
         # Генерируем токены
         refresh = RefreshToken.for_user(user)
@@ -107,8 +155,12 @@ def logout(request):
     try:
         refresh_token = request.data.get('refresh')
         if refresh_token:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except (AttributeError, TokenError):
+                # Если blacklist недоступен или токен некорректен, просто продолжаем
+                pass
         return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -127,3 +179,29 @@ def current_user(request):
         'user': UserSerializer(request.user).data,
         'employee': employee_data
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_create_employee(request):
+    if not request.user.is_superuser:
+        return Response(
+            {'error': 'Доступ запрещен. Требуются права администратора.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    serializer = AdminEmployeeCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    result = serializer.save()
+    employee_data = EmployeeDetailSerializer(result['employee']).data
+    user_data = UserSerializer(result['user']).data
+
+    return Response(
+        {
+            'user': user_data,
+            'employee': employee_data,
+            'temporary_password': result['password'],
+        },
+        status=status.HTTP_201_CREATED,
+    )
