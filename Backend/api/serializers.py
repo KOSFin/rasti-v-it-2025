@@ -154,6 +154,9 @@ class Feedback360Serializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback360
         fields = '__all__'
+        extra_kwargs = {
+            'assessor': {'required': False},
+        }
 
 class ManagerReviewSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)
@@ -163,6 +166,9 @@ class ManagerReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManagerReview
         fields = '__all__'
+        extra_kwargs = {
+            'manager': {'required': False},
+        }
 
 class PotentialAssessmentSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)
@@ -171,6 +177,9 @@ class PotentialAssessmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PotentialAssessment
         fields = '__all__'
+        extra_kwargs = {
+            'manager': {'required': False},
+        }
 
 class FinalReviewSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
