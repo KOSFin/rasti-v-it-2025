@@ -1,0 +1,240 @@
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.page-overline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 620px;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn.primary {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.btn.primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn.ghost:hover {
+  background: var(--bg-hover);
+}
+
+.page-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.page-banner.error {
+  background: rgba(244, 67, 54, 0.14);
+  color: var(--color-error);
+}
+
+.page-banner.success {
+  background: rgba(76, 175, 80, 0.14);
+  color: var(--color-success);
+}
+
+.panel {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panel-overline {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.panel-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+}
+
+.table-wrapper {
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: var(--bg-tertiary);
+}
+
+.table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.table td {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.table tbody tr:hover td {
+  background: var(--bg-hover);
+}
+
+.table-placeholder {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.table-placeholder.empty {
+  color: var(--text-tertiary);
+}
+
+.table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.icon-btn.danger {
+  border-color: rgba(244, 67, 54, 0.5);
+  color: var(--color-error);
+}
+
+.icon-btn.danger:hover {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+@media (max-width: 960px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .page-actions {
+    flex-wrap: wrap;
+  }
+  .table-actions {
+    justify-content: flex-start;
+  }
+}

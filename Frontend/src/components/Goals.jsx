@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiSearch, FiFilter, FiTrash2, FiCalendar, FiExternalLink } from 'react-icons/fi';
-import { getGoals, getTasks, createGoal, deleteGoal } from '../api/services';
+import { useSearchParams } from 'react-router-dom';
+import { FiPlus, FiSearch, FiFilter, FiTrash2, FiCalendar, FiExternalLink, FiUsers } from 'react-icons/fi';
+import { getGoals, getTasks, createGoal, deleteGoal, getEmployees } from '../api/services';
 import { useAuth } from '../contexts/AuthContext';
 import './Common.css';
 
@@ -22,12 +23,15 @@ const initialFormState = {
   end_date: '',
   expected_results: '',
   task_link: '',
+  employee: '',
 };
 
 function Goals() {
-  const { employee } = useAuth();
+  const { employee, user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [goals, setGoals] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +40,13 @@ function Goals() {
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [employeesError, setEmployeesError] = useState('');
+
+  const isManager = Boolean(employee?.is_manager);
+  const isAdmin = Boolean(user?.is_superuser);
+  const canAssign = isAdmin || isManager;
 
   const loadData = async () => {
     setLoading(true);
@@ -61,6 +72,50 @@ function Goals() {
     loadData();
   }, []);
 
+  const loadEmployees = async () => {
+    if (!canAssign) {
+      return;
+    }
+
+    setEmployeesLoading(true);
+    setEmployeesError('');
+
+    const params = { page_size: 300, ordering: 'user__last_name' };
+    if (isManager && employee?.department) {
+      params.department = employee.department;
+    }
+
+    try {
+      const response = await getEmployees(params);
+      setEmployees(extractResults(response));
+    } catch (err) {
+      console.error('Не удалось загрузить сотрудников для назначения цели', err);
+      setEmployees([]);
+      setEmployeesError('Не удалось загрузить список сотрудников. Попробуйте позже.');
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canAssign) {
+      loadEmployees();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAssign]);
+
+  useEffect(() => {
+    if (!canAssign) {
+      return;
+    }
+    const initialAssignee = searchParams.get('employee');
+    if (initialAssignee) {
+      setAssigneeFilter(initialAssignee);
+      setFormData((prev) => ({ ...prev, employee: initialAssignee }));
+      setShowForm(true);
+    }
+  }, [canAssign, searchParams]);
+
   const tasksByGoal = useMemo(() => {
     return tasks.reduce((acc, task) => {
       acc[task.goal] = acc[task.goal] ? [...acc[task.goal], task] : [task];
@@ -71,11 +126,13 @@ function Goals() {
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
       const matchesType = filterType === 'all' || goal.goal_type === filterType;
+      const matchesEmployee =
+        assigneeFilter === 'all' || String(goal.employee) === String(assigneeFilter);
       const matchesSearch = goal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         goal.description.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesType && matchesSearch;
+      return matchesType && matchesEmployee && matchesSearch;
     });
-  }, [goals, filterType, searchTerm]);
+  }, [goals, filterType, searchTerm, assigneeFilter]);
 
   const formChange = (event) => {
     const { name, value } = event.target;
@@ -94,13 +151,32 @@ function Goals() {
     setSaving(true);
 
     try {
-      await createGoal(formData);
+      const payload = { ...formData };
+      if (!canAssign || !payload.employee) {
+        delete payload.employee;
+      } else {
+        payload.employee = Number(payload.employee);
+      }
+
+      if (!payload.task_link) {
+        delete payload.task_link;
+      }
+
+      await createGoal(payload);
       setShowForm(false);
-      setFormData(initialFormState);
+      setFormData({
+        ...initialFormState,
+        employee: canAssign && assigneeFilter !== 'all' ? assigneeFilter : '',
+      });
       await loadData();
     } catch (err) {
       console.error('Не удалось создать цель', err);
-      setFormError('Не удалось создать цель. Проверьте данные и попробуйте ещё раз.');
+      const message =
+        err.response?.data?.employee?.[0] ||
+        err.response?.data?.error ||
+        err.response?.data?.detail ||
+        'Не удалось создать цель. Проверьте данные и попробуйте ещё раз.';
+      setFormError(message);
     } finally {
       setSaving(false);
     }
@@ -171,6 +247,22 @@ function Goals() {
               <option value="personal">Личное развитие</option>
             </select>
           </div>
+          {canAssign && (
+            <div className="input-with-icon select">
+              <FiUsers size={16} />
+              <select
+                value={assigneeFilter}
+                onChange={(event) => setAssigneeFilter(event.target.value)}
+              >
+                <option value="all">Все сотрудники</option>
+                {employees.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.full_name || item.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
             <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Новая цель'}
           </button>
@@ -178,6 +270,7 @@ function Goals() {
       </header>
 
       {error && <div className="page-banner error">{error}</div>}
+      {employeesError && <div className="page-banner error">{employeesError}</div>}
 
       {showForm && (
         <section className="panel">
@@ -186,6 +279,25 @@ function Goals() {
             <span>Определите параметры новой цели</span>
           </header>
           <form className="form-grid" onSubmit={handleSubmit}>
+            {canAssign && (
+              <label className="form-field">
+                <span>Сотрудник *</span>
+                <select
+                  name="employee"
+                  value={formData.employee}
+                  onChange={formChange}
+                  required
+                  disabled={employeesLoading || saving}
+                >
+                  <option value="">Выберите сотрудника</option>
+                  {employees.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.full_name || item.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="form-field">
               <span>Название *</span>
               <input
@@ -280,6 +392,12 @@ function Goals() {
                     <div>
                       <h3>{goal.title}</h3>
                       <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
+                      {canAssign && goal.employee_name && (
+                        <span className="card-meta">
+                          {goal.employee_name}
+                          {goal.department_name ? ` • ${goal.department_name}` : ''}
+                        </span>
+                      )}
                     </div>
                     <button type="button" className="icon-btn" onClick={() => handleDelete(goal.id)}>
                       <FiTrash2 size={16} />

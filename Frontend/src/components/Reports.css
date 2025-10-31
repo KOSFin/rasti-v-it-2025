@@ -1,0 +1,233 @@
+.reports-page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.page-overline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 640px;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-select {
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn.ghost:hover {
+  background: var(--bg-hover);
+}
+
+.page-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.page-banner.error {
+  background: rgba(244, 67, 54, 0.14);
+  color: var(--color-error);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.summary-card.warning {
+  border-color: rgba(255, 152, 0, 0.4);
+}
+
+.summary-card .label {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.summary-card .value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.summary-card .hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.grid.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.panel {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panel-overline {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.metrics-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.metrics-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.metrics-list li strong {
+  color: var(--text-primary);
+}
+
+.metrics-list li span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.metrics-list li.empty {
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chip.success {
+  color: var(--color-success);
+}
+
+.chip.warning {
+  color: var(--color-warning);
+}
+
+@media (max-width: 960px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+
+  .grid.panels {
+    grid-template-columns: 1fr;
+  }
+}

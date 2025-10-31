@@ -1,7 +1,8 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.exceptions import ValidationError
 from django.db.models import Q, Avg, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import *
@@ -14,8 +15,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            return [IsAdminUser()]
+        return super().get_permissions()
+
 class EmployeeViewSet(viewsets.ModelViewSet):
-    queryset = Employee.objects.all()
+    queryset = Employee.objects.select_related('user', 'department').all()
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -23,6 +29,19 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'position']
     ordering_fields = ['hire_date', 'position']
     
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        try:
+            employee = Employee.objects.get(user=user)
+        except Employee.DoesNotExist:
+            return self.queryset.none()
+
+        if employee.is_manager:
+            return self.queryset.filter(department=employee.department)
+        return self.queryset.filter(pk=employee.pk)
+
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return EmployeeDetailSerializer
@@ -42,6 +61,35 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(team, many=True)
         return Response(serializer.data)
 
+    def perform_destroy(self, instance):
+        user = instance.user
+        instance.delete()
+        if user and not Employee.objects.filter(user=user).exists():
+            user.delete()
+
+    @action(detail=True, methods=['post'])
+    def generate_password(self, request, pk=None):
+        if not request.user.is_superuser:
+            return Response({'error': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        employee = self.get_object()
+        from django.utils.crypto import get_random_string
+
+        password = get_random_string(
+            length=12,
+            allowed_chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789@#$%'
+        )
+
+        user = employee.user
+        user.set_password(password)
+        user.save(update_fields=['password'])
+
+        return Response({
+            'username': user.username,
+            'temporary_password': password,
+            'employee_id': employee.id,
+        })
+
 class GoalViewSet(viewsets.ModelViewSet):
     serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
@@ -54,17 +102,39 @@ class GoalViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
+            if user.is_superuser:
+                return Goal.objects.all()
             if employee.is_manager:
                 # Менеджер видит цели своего отдела
                 return Goal.objects.filter(employee__department=employee.department)
             return Goal.objects.filter(employee=employee)
         except Employee.DoesNotExist:
-            return Goal.objects.none()
+            return Goal.objects.all() if user.is_superuser else Goal.objects.none()
     
     def perform_create(self, serializer):
         user = self.request.user
-        employee = Employee.objects.get(user=user)
-        serializer.save(employee=employee)
+        target_employee = None
+
+        if user.is_superuser:
+            employee_id = self.request.data.get('employee')
+            if employee_id:
+                target_employee = Employee.objects.filter(pk=employee_id).first()
+                if not target_employee:
+                    raise ValidationError({'employee': 'Выбранный сотрудник не найден.'})
+        else:
+            employee = Employee.objects.get(user=user)
+            employee_id = self.request.data.get('employee')
+            if employee.is_manager and employee_id:
+                target_employee = Employee.objects.filter(pk=employee_id, department=employee.department).first()
+                if not target_employee:
+                    raise ValidationError({'employee': 'Можно назначать цели только сотрудникам своего отдела.'})
+            else:
+                target_employee = employee
+
+        if not target_employee:
+            raise ValidationError({'employee': 'Не удалось определить сотрудника для цели.'})
+
+        serializer.save(employee=target_employee)
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
@@ -77,11 +147,13 @@ class TaskViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
+            if user.is_superuser:
+                return Task.objects.all()
             if employee.is_manager:
                 return Task.objects.filter(goal__employee__department=employee.department)
             return Task.objects.filter(goal__employee=employee)
         except Employee.DoesNotExist:
-            return Task.objects.none()
+            return Task.objects.all() if user.is_superuser else Task.objects.none()
 
 class SelfAssessmentViewSet(viewsets.ModelViewSet):
     serializer_class = SelfAssessmentSerializer

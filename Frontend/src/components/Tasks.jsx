@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiPlus, FiList, FiCheckSquare, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiList, FiCheckSquare, FiTrash2, FiUsers } from 'react-icons/fi';
 import { getTasks, getGoals, createTask, updateTask, deleteTask } from '../api/services';
 import './Common.css';
 
@@ -24,6 +24,7 @@ const defaultForm = {
 function Tasks() {
   const [searchParams] = useSearchParams();
   const filterGoalParam = searchParams.get('goal');
+  const filterEmployeeParam = searchParams.get('employee');
 
   const [tasks, setTasks] = useState([]);
   const [goals, setGoals] = useState([]);
@@ -34,10 +35,12 @@ function Tasks() {
   const [saving, setSaving] = useState(false);
   const [filterGoal, setFilterGoal] = useState(filterGoalParam || 'all');
   const [filterStatus, setFilterStatus] = useState('active');
+  const [filterEmployee, setFilterEmployee] = useState(filterEmployeeParam || 'all');
 
   useEffect(() => {
     setFilterGoal(filterGoalParam || 'all');
-  }, [filterGoalParam]);
+    setFilterEmployee(filterEmployeeParam || 'all');
+  }, [filterGoalParam, filterEmployeeParam]);
 
   const loadData = async () => {
     setLoading(true);
@@ -70,6 +73,17 @@ function Tasks() {
     }, {});
   }, [goals]);
 
+  const employeeOptions = useMemo(() => {
+    const entries = new Map();
+    goals.forEach((goal) => {
+      if (goal.employee) {
+        const label = goal.employee_name || `Сотрудник #${goal.employee}`;
+        entries.set(goal.employee, label);
+      }
+    });
+    return Array.from(entries, ([id, name]) => ({ id, name }));
+  }, [goals]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       const matchesGoal = filterGoal === 'all' || String(task.goal) === String(filterGoal);
@@ -77,9 +91,11 @@ function Tasks() {
         filterStatus === 'all' ||
         (filterStatus === 'active' && !task.is_completed) ||
         (filterStatus === 'completed' && task.is_completed);
-      return matchesGoal && matchesStatus;
+      const ownerId = goalMap[task.goal]?.employee;
+      const matchesEmployee = filterEmployee === 'all' || String(ownerId) === String(filterEmployee);
+      return matchesGoal && matchesStatus && matchesEmployee;
     });
-  }, [tasks, filterGoal, filterStatus]);
+  }, [tasks, filterGoal, filterStatus, filterEmployee, goalMap]);
 
   const groupedTasks = useMemo(() => {
     return filteredTasks.reduce((acc, task) => {
@@ -182,6 +198,19 @@ function Tasks() {
               <option value="all">Все задачи</option>
             </select>
           </div>
+          {employeeOptions.length > 0 && (
+            <div className="input-with-icon select">
+              <FiUsers size={16} />
+              <select value={filterEmployee} onChange={(event) => setFilterEmployee(event.target.value)}>
+                <option value="all">Все сотрудники</option>
+                {employeeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
             <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Добавить задачу'}
           </button>
@@ -203,7 +232,7 @@ function Tasks() {
                 <option value="">Выберите цель</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>
-                    {goal.title}
+                    {goal.employee_name ? `${goal.title} — ${goal.employee_name}` : goal.title}
                   </option>
                 ))}
               </select>

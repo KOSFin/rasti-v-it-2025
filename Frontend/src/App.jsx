@@ -9,11 +9,14 @@ import Tasks from './components/Tasks';
 import SelfAssessment from './components/SelfAssessment';
 import Feedback360 from './components/Feedback360';
 import NineBox from './components/NineBox';
+import Team from './components/Team';
+import Reports from './components/Reports';
 import AdminUsers from './components/AdminUsers';
+import AdminDepartments from './components/AdminDepartments';
 import './App.css';
 
-function PrivateRoute({ children, requireAdmin = false }) {
-  const { user, loading } = useAuth();
+function PrivateRoute({ children, requireAdmin = false, requireManager = false }) {
+  const { user, employee, loading } = useAuth();
   const token = localStorage.getItem('access_token');
 
   if (loading) {
@@ -34,6 +37,10 @@ function PrivateRoute({ children, requireAdmin = false }) {
   }
 
   if (requireAdmin && !user.is_superuser) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireManager && !(employee?.is_manager || user?.is_superuser)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -96,10 +103,34 @@ function App() {
               }
             />
             <Route
+              path="/team"
+              element={
+                <PrivateRoute requireManager>
+                  <Team />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <PrivateRoute requireManager>
+                  <Reports />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="/admin/users"
               element={
                 <PrivateRoute requireAdmin>
                   <AdminUsers />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/departments"
+              element={
+                <PrivateRoute requireAdmin>
+                  <AdminDepartments />
                 </PrivateRoute>
               }
             />

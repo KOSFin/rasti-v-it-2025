@@ -11,7 +11,9 @@ import {
   FiUserPlus,
   FiTrendingUp,
   FiClock,
-  FiCheck
+  FiCheck,
+  FiLayers,
+  FiUserCheck,
 } from 'react-icons/fi';
 import { getGoals, getTasks, updateTask } from '../../api/services';
 import { useAuth } from '../../contexts/AuthContext';
@@ -136,17 +138,18 @@ const Sidebar = () => {
     { path: '/goals', icon: FiTarget, label: 'Цели' },
     { path: '/tasks', icon: FiCheckSquare, label: 'Задачи' },
     { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
-    { path: '/feedback-360', icon: FiUsers, label: 'Оценка 360°' },
+    { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
     { path: '/nine-box', icon: FiGrid, label: 'Nine Box' },
   ];
 
-  if (user?.is_superuser) {
-    navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
+  if (isManager || user?.is_superuser) {
+    navItems.splice(1, 0, { path: '/team', icon: FiUsers, label: 'Команда' });
+    navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });
   }
 
-  if (isManager) {
-    navItems.splice(1, 0, { path: '/team', icon: FiUserPlus, label: 'Команда' });
-    navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });
+  if (user?.is_superuser) {
+    navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
+    navItems.splice(2, 0, { path: '/admin/departments', icon: FiLayers, label: 'Отделы' });
   }
 
   return (

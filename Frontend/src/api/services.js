@@ -23,6 +23,15 @@ export const getDepartments = () =>
 export const getDepartment = (id) => 
   api.get(`/api/departments/${id}/`);
 
+export const createDepartment = (data) =>
+  api.post('/api/departments/', data);
+
+export const updateDepartment = (id, data) =>
+  api.put(`/api/departments/${id}/`, data);
+
+export const deleteDepartment = (id) =>
+  api.delete(`/api/departments/${id}/`);
+
 // Employees
 export const getEmployees = (params) => 
   api.get('/api/employees/', { params });
@@ -35,6 +44,12 @@ export const getManagers = () =>
 
 export const getTeam = (id) => 
   api.get(`/api/employees/${id}/team/`);
+
+export const deleteEmployee = (id) =>
+  api.delete(`/api/employees/${id}/`);
+
+export const resetEmployeePassword = (id) =>
+  api.post(`/api/employees/${id}/generate_password/`);
 
 // Goals
 export const getGoals = (params) => 

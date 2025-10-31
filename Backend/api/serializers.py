@@ -8,9 +8,11 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser']
 
 class DepartmentSerializer(serializers.ModelSerializer):
+    employees_count = serializers.IntegerField(source='employee_set.count', read_only=True)
+
     class Meta:
         model = Department
-        fields = '__all__'
+        fields = ['id', 'name', 'description', 'employees_count']
 
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
@@ -114,11 +116,21 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
         }
 
 class GoalSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
+    department_name = serializers.CharField(source='employee.department.name', read_only=True)
+
     class Meta:
         model = Goal
         fields = '__all__'
+        extra_kwargs = {
+            'employee': {'required': False, 'allow_null': True},
+        }
 
 class TaskSerializer(serializers.ModelSerializer):
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    employee_name = serializers.CharField(source='goal.employee.user.get_full_name', read_only=True)
+    department_name = serializers.CharField(source='goal.employee.department.name', read_only=True)
+
     class Meta:
         model = Task
         fields = '__all__'
