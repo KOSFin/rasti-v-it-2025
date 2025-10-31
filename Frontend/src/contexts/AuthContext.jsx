@@ -8,9 +8,13 @@ export const AuthProvider = ({ children }) => {
     const storedUser = localStorage.getItem('user');
     const storedEmployee = localStorage.getItem('employee');
 
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    const parsedEmployee = storedEmployee ? JSON.parse(storedEmployee) : null;
+
     return {
-      user: storedUser ? JSON.parse(storedUser) : null,
-      employee: storedEmployee ? JSON.parse(storedEmployee) : null,
+      user: parsedUser,
+      employee: parsedEmployee,
+      pendingReview: parsedEmployee?.pending_self_review || null,
       loading: true,
       error: null,
     };
@@ -27,7 +31,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('access_token');
 
     if (!token) {
-      setState({ user: null, employee: null, loading: false, error: null });
+      setState({ user: null, employee: null, pendingReview: null, loading: false, error: null });
       return;
     }
 
@@ -36,21 +40,22 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await getCurrentUser();
       const { user, employee } = response.data;
+      const pendingReview = employee?.pending_self_review || null;
 
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('employee', JSON.stringify(employee));
 
-      setState({ user, employee, loading: false, error: null });
+      setState({ user, employee, pendingReview, loading: false, error: null });
     } catch (error) {
       console.error('Failed to fetch current user', error);
       clearAuthStorage();
-      setState({ user: null, employee: null, loading: false, error });
+      setState({ user: null, employee: null, pendingReview: null, loading: false, error });
     }
   }, [clearAuthStorage]);
 
   const signOut = useCallback(() => {
     clearAuthStorage();
-    setState({ user: null, employee: null, loading: false, error: null });
+    setState({ user: null, employee: null, pendingReview: null, loading: false, error: null });
   }, [clearAuthStorage]);
 
   useEffect(() => {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
 
 from django.db import transaction
 from django.db.models import Avg, F, Q
@@ -27,6 +27,9 @@ from .models import (
     TeamRelation,
     default_token_expiry,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - import only for type hints
+    from api.models import Employee
 
 
 class ServiceError(Exception):
@@ -269,6 +272,58 @@ def _create_question_placeholders(
                 unanswered += 1
 
     return answers_created, unanswered
+
+
+def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
+    """Guarantee that a self-review link exists for the employer's zero period."""
+
+    questions = list(
+        SkillQuestion.objects.filter(is_active=True)
+        .select_related("category")
+        .order_by("category__skill_type", "category__name", "id")
+    )
+    if not questions:
+        return None
+
+    zero_period = _ensure_zero_period()
+
+    existing_log = (
+        ReviewLog.objects.filter(
+            employer=employer,
+            respondent=employer,
+            period=zero_period,
+            context=ReviewLog.CONTEXT_SKILL,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    if existing_log and existing_log.status in [ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL]:
+        existing_log.expires_at = default_token_expiry()
+        existing_log.save(update_fields=["expires_at", "updated_at"])
+        _ensure_notification_for_log(existing_log)
+        return existing_log
+
+    created_answers, _ = _create_question_placeholders(
+        employer=employer,
+        respondent=employer,
+        period=zero_period,
+        questions=questions,
+    )
+
+    if not created_answers and existing_log and existing_log.status == ReviewLog.STATUS_COMPLETED:
+        return None
+
+    review_log, _ = _create_review_log(
+        employer=employer,
+        respondent=employer,
+        period=zero_period,
+        context=ReviewLog.CONTEXT_SKILL,
+        metadata={"review_type": "self", "trigger": "first_login"},
+    )
+    review_log.status = ReviewLog.STATUS_PENDING
+    review_log.save(update_fields=["status", "updated_at"])
+    return review_log
 
 
 @transaction.atomic
@@ -927,3 +982,57 @@ def submit_task_answers(token: str, answers: List[Dict]) -> Dict:
         "answers_saved": updated,
         "review_completed": not remaining,
     }
+
+
+def sync_employer_from_employee(employee: "Employee") -> Optional[Employer]:
+    """Synchronise performance Employer profile with core Employee record."""
+
+    if employee is None:
+        return None
+
+    user = employee.user
+    if user is None:
+        return None
+
+    email = (user.email or "").strip().lower()
+    if not email:
+        return None
+
+    fio_parts = [
+        part for part in [user.last_name, user.first_name, getattr(user, "patronymic", "")] if part
+    ]
+    fio = " ".join(fio_parts) or user.get_full_name() or user.username or email
+
+    defaults = {
+        "fio": fio,
+        "position": employee.position or "Сотрудник",
+        "date_of_employment": employee.hire_date,
+    }
+
+    employer, created = Employer.objects.get_or_create(email=email, defaults=defaults)
+
+    update_fields: List[str] = []
+
+    if employer.user_id != user.id:
+        employer.user = user
+        update_fields.append("user")
+
+    if employer.fio != fio:
+        employer.fio = fio
+        update_fields.append("fio")
+
+    if employee.hire_date and employer.date_of_employment != employee.hire_date:
+        employer.date_of_employment = employee.hire_date
+        update_fields.append("date_of_employment")
+
+    if employee.position and employer.position != employee.position:
+        employer.position = employee.position
+        update_fields.append("position")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        employer.save(update_fields=update_fields)
+    elif created:
+        employer.save()
+
+    return employer

@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ export const NotificationProvider = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || authLoading) {
       setNotifications([]);
       setUnreadCount(0);
       if (pollerRef.current) {
@@ -59,7 +59,7 @@ export const NotificationProvider = ({ children }) => {
         pollerRef.current = null;
       }
     };
-  }, [user, fetchNotifications]);
+  }, [user, authLoading, fetchNotifications]);
 
   const markAsRead = useCallback(
     async (notificationId) => {

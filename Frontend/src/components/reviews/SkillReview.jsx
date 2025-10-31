@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FiArrowLeft, FiCheck, FiSave } from 'react-icons/fi';
 import { getReviewFormByToken, submitReviewAnswers } from '../../api/services';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import './ReviewForm.css';
 
 const gradeOptions = Array.from({ length: 11 }, (_, index) => index);
@@ -13,6 +14,7 @@ const SkillReview = () => {
   const notificationId = searchParams.get('notification_id');
   const navigate = useNavigate();
   const { markAsRead } = useNotifications();
+  const { refreshProfile } = useAuth();
 
   const [payload, setPayload] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -76,6 +78,11 @@ const SkillReview = () => {
 
       if (mode === 'full') {
         setSuccessMessage('Ответы успешно отправлены.');
+        try {
+          await refreshProfile();
+        } catch (profileError) {
+          console.warn('Не удалось обновить профиль после отправки самооценки', profileError);
+        }
       } else {
         setSuccessMessage('Черновик сохранён. Вы можете вернуться позже.');
       }

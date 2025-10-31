@@ -17,6 +17,7 @@ from .serializers import (
     EmployeeSerializer,
     UserSerializer,
 )
+from performance.services import ensure_initial_self_review, sync_employer_from_employee
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -89,13 +90,25 @@ def register(request):
                 return value.strip().lower() in ['1', 'true', 'yes', 'on']
             return bool(value)
 
-        Employee.objects.create(
+        employee = Employee.objects.create(
             user=user,
             department=department,
             position=request.data.get('position', 'Сотрудник'),
             is_manager=to_bool(request.data.get('is_manager'), False),
             hire_date=hire_date,
         )
+
+        employer = sync_employer_from_employee(employee)
+        pending_review = None
+        if employer:
+            log = ensure_initial_self_review(employer)
+            if log:
+                pending_review = {
+                    'token': str(log.token),
+                    'expires_at': log.expires_at.isoformat(),
+                    'context': log.context,
+                    'employer_id': employer.id,
+                }
         
         # Генерируем токены
         refresh = RefreshToken.for_user(user)
@@ -103,7 +116,11 @@ def register(request):
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
-            'user': UserSerializer(user).data
+            'user': UserSerializer(user).data,
+            'employee_meta': {
+                'pending_self_review': pending_review,
+                'employer_id': employer.id if employer else None,
+            },
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
@@ -138,6 +155,20 @@ def login(request):
     try:
         employee = Employee.objects.get(user=user)
         employee_data = EmployeeSerializer(employee).data
+        employer = sync_employer_from_employee(employee)
+        pending_review = None
+        if employer:
+            log = ensure_initial_self_review(employer)
+            if log and log.status != log.STATUS_COMPLETED:
+                pending_review = {
+                    'token': str(log.token),
+                    'expires_at': log.expires_at.isoformat(),
+                    'context': log.context,
+                    'employer_id': employer.id,
+                }
+            employee_data['employer_id'] = employer.id
+        if pending_review:
+            employee_data['pending_self_review'] = pending_review
     except Employee.DoesNotExist:
         employee_data = None
     
@@ -172,6 +203,20 @@ def current_user(request):
     try:
         employee = Employee.objects.get(user=request.user)
         employee_data = EmployeeSerializer(employee).data
+        employer = sync_employer_from_employee(employee)
+        pending_review = None
+        if employer:
+            log = ensure_initial_self_review(employer)
+            if log and log.status != log.STATUS_COMPLETED:
+                pending_review = {
+                    'token': str(log.token),
+                    'expires_at': log.expires_at.isoformat(),
+                    'context': log.context,
+                    'employer_id': employer.id,
+                }
+            employee_data['employer_id'] = employer.id
+        if pending_review:
+            employee_data['pending_self_review'] = pending_review
     except Employee.DoesNotExist:
         employee_data = None
     
@@ -196,6 +241,11 @@ def admin_create_employee(request):
     result = serializer.save()
     employee_data = EmployeeDetailSerializer(result['employee']).data
     user_data = UserSerializer(result['user']).data
+
+    employer = sync_employer_from_employee(result['employee'])
+    if employer:
+        ensure_initial_self_review(employer)
+        employee_data['employer_id'] = employer.id
 
     return Response(
         {

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -19,7 +19,8 @@ import TaskReview from './components/reviews/TaskReview';
 import './App.css';
 
 function PrivateRoute({ children, requireAdmin = false, requireManager = false }) {
-  const { user, employee, loading } = useAuth();
+  const { user, employee, loading, pendingReview } = useAuth();
+  const location = useLocation();
   const token = localStorage.getItem('access_token');
 
   if (loading) {
@@ -45,6 +46,22 @@ function PrivateRoute({ children, requireAdmin = false, requireManager = false }
 
   if (requireManager && !(employee?.is_manager || user?.is_superuser)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  const requiresInitialReview =
+    pendingReview &&
+    pendingReview.context === 'skill' &&
+    pendingReview.token;
+
+  if (requiresInitialReview) {
+    const targetPath = `/reviews/skills/${pendingReview.token}`;
+    if (location.pathname !== targetPath) {
+      const params = new URLSearchParams(location.search);
+      if (!params.has('welcome')) {
+        params.set('welcome', '1');
+      }
+      return <Navigate to={`${targetPath}?${params.toString()}`} replace />;
+    }
   }
 
   return <Layout>{children}</Layout>;
