@@ -66,15 +66,20 @@ const SkillReview = () => {
     setSubmitting(true);
     setSuccessMessage('');
 
+    // Basic client-side validation: ensure there is at least one answer
+    const answerEntries = Object.entries(answers).map(([questionId, grade]) => ({
+      id_question: Number(questionId),
+      grade: Number(grade ?? 0),
+    }));
+
+    if (!answerEntries.length) {
+      setError('Нет ответов для отправки. Пожалуйста, оцените хотя бы один вопрос.');
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      const result = await submitReviewAnswers({
-        token,
-        answers: Object.entries(answers).map(([questionId, grade]) => ({
-          id_question: Number(questionId),
-          grade: Number(grade ?? 0),
-        })),
-        save_mode: mode,
-      });
+      const result = await submitReviewAnswers({ token, answers: answerEntries, save_mode: mode });
 
       if (mode === 'full') {
         setSuccessMessage('Ответы успешно отправлены.');
@@ -89,7 +94,11 @@ const SkillReview = () => {
       setPayload((prev) => ({ ...prev }));
     } catch (submitError) {
       console.error('Не удалось отправить ответы', submitError);
-      setError('Не удалось отправить ответы. Проверьте сетевое подключение и попробуйте снова.');
+      const resp = submitError?.response?.data;
+      const serverMessage = resp?.message || resp?.detail || (typeof resp === 'string' ? resp : null);
+      setError(
+        serverMessage || 'Не удалось отправить ответы. Проверьте сетевое подключение и попробуйте снова.'
+      );
     } finally {
       setSubmitting(false);
     }
