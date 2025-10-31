@@ -4,7 +4,7 @@ from datetime import date
 
 from rest_framework import serializers
 
-from .models import Employer, ReviewGoal, ReviewTask
+from .models import Employer, ReviewGoal, ReviewTask, SiteNotification
 
 
 class ReviewCycleTriggerSerializer(serializers.Serializer):
@@ -87,3 +87,21 @@ class TaskReviewAnswerItemSerializer(serializers.Serializer):
 class TaskReviewSubmitSerializer(serializers.Serializer):
     token = serializers.UUIDField()
     answers = TaskReviewAnswerItemSerializer(many=True)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SiteNotification
+        fields = [
+            "id",
+            "title",
+            "message",
+            "context",
+            "link",
+            "metadata",
+            "is_read",
+            "created_at",
+            "read_at",
+            "related_log",
+        ]
+        read_only_fields = fields

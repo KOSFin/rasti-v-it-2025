@@ -22,6 +22,7 @@ from .models import (
     ReviewTask,
     SkillCategory,
     SkillQuestion,
+    SiteNotification,
     TaskReviewAnswer,
     TeamRelation,
     default_token_expiry,
@@ -42,13 +43,13 @@ class ServiceError(Exception):
 class ReviewCycleResult:
     created_self_tests: int = 0
     created_peer_reviews: int = 0
-    emails_prepared: int = 0
+    notifications_created: int = 0
 
     def as_dict(self) -> Dict[str, int]:
         return {
             "created_self_tests": self.created_self_tests,
             "created_peer_reviews": self.created_peer_reviews,
-            "emails_sent": self.emails_prepared,
+            "notifications_created": self.notifications_created,
         }
 
 
@@ -100,7 +101,7 @@ def _create_review_log(
     period: ReviewPeriod,
     context: str,
     metadata: Optional[Dict] = None,
-) -> ReviewLog:
+) -> Tuple[ReviewLog, bool]:
     existing_log = ReviewLog.objects.filter(
         employer=employer,
         respondent=respondent,
@@ -117,9 +118,10 @@ def _create_review_log(
             existing_log.metadata = merged
         existing_log.status = ReviewLog.STATUS_PENDING
         existing_log.save(update_fields=["expires_at", "metadata", "status", "updated_at"])
-        return existing_log
+        created_notification = _ensure_notification_for_log(existing_log)
+        return existing_log, created_notification
 
-    return ReviewLog.objects.create(
+    new_log = ReviewLog.objects.create(
         employer=employer,
         respondent=respondent,
         period=period,
@@ -127,6 +129,112 @@ def _create_review_log(
         metadata=metadata or {},
         status=ReviewLog.STATUS_PENDING_EMAIL,
     )
+    created_notification = _ensure_notification_for_log(new_log)
+    return new_log, created_notification
+
+
+def _ensure_notification_for_log(log: ReviewLog) -> bool:
+    if log.respondent_id is None:
+        return False
+
+    title, message, base_path, extra_meta = _notification_content_for_log(log)
+    base_metadata: Dict = {**(log.metadata or {})}
+    if extra_meta:
+        base_metadata.update(extra_meta)
+
+    base_metadata.setdefault("employer_id", log.employer_id)
+    base_metadata.setdefault("respondent_id", log.respondent_id)
+    if log.period_id:
+        base_metadata.setdefault("period_id", log.period_id)
+    base_metadata["token"] = str(log.token)
+
+    notification, created = SiteNotification.objects.update_or_create(
+        related_log=log,
+        defaults={
+            "recipient": log.respondent,
+            "title": title,
+            "message": message,
+            "context": log.context,
+            "metadata": base_metadata,
+            "is_read": False,
+            "read_at": None,
+        },
+    )
+
+    metadata_with_id = {**base_metadata, "notification_id": str(notification.id)}
+    update_fields: List[str] = []
+
+    if notification.metadata != metadata_with_id:
+        notification.metadata = metadata_with_id
+        update_fields.append("metadata")
+
+    desired_link = _notification_link(log, str(notification.id), base_path)
+    if notification.link != desired_link:
+        notification.link = desired_link
+        update_fields.append("link")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        notification.save(update_fields=update_fields)
+    else:
+        notification.save(update_fields=["updated_at"])
+
+    return created
+
+
+def _notification_content_for_log(log: ReviewLog) -> Tuple[str, str, str, Dict]:
+    metadata = log.metadata or {}
+
+    if log.context == ReviewLog.CONTEXT_SKILL:
+        review_type = metadata.get("review_type", "peer")
+        period_label = _period_label(log.period) if log.period else "текущий период"
+        employer_name = log.employer.fio
+
+        if review_type == "self":
+            title = "Самооценка компетенций"
+            message = f"Обновите самооценку навыков за период {period_label}."
+        else:
+            title = "Оценка коллеги"
+            message = f"Оцените навыки {employer_name} за период {period_label}."
+
+        base_path = "/reviews/skills"
+        extra_meta = {"period_label": period_label, "review_type": review_type}
+        return title, message, base_path, extra_meta
+
+    if log.context == ReviewLog.CONTEXT_TASK:
+        task_title = metadata.get("task_title")
+        if not task_title:
+            task_id = metadata.get("task_id")
+            if task_id:
+                task_title = (
+                    ReviewTask.objects.filter(id=task_id).values_list("title", flat=True).first()
+                )
+        task_title = task_title or "поставленной задачи"
+        title = f'Оценка задачи "{task_title}"'
+        message = f'Пожалуйста, оцените выполнение задачи "{task_title}".'
+        base_path = "/reviews/tasks"
+        extra_meta = {"task_title": task_title}
+        return title, message, base_path, extra_meta
+
+    if log.context == ReviewLog.CONTEXT_GOAL:
+        goal_title = metadata.get("goal_title", "поставленной цели")
+        title = f'Оценка цели "{goal_title}"'
+        message = f'Подтвердите результаты достижения цели "{goal_title}".'
+        base_path = "/reviews/goals"
+        extra_meta = {"goal_title": goal_title}
+        return title, message, base_path, extra_meta
+
+    title = "Новое уведомление"
+    message = "Для вас подготовлена форма обратной связи."
+    return title, message, "/reviews/skills", {}
+
+
+def _notification_link(log: ReviewLog, notification_id: str, base_path: str) -> str:
+    path = base_path if base_path.startswith("/") else f"/{base_path.lstrip('/')}"
+    token = str(log.token)
+    if notification_id:
+        return f"{path.rstrip('/')}/{token}?notification_id={notification_id}"
+    return f"{path.rstrip('/')}/{token}"
 
 
 def _create_question_placeholders(
@@ -193,14 +301,15 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
             )
             if created_answers:
                 result.created_self_tests += 1
-                _create_review_log(
+                _, notification_created = _create_review_log(
                     employer=employer,
                     respondent=employer,
                     period=zero_period,
                     context=ReviewLog.CONTEXT_SKILL,
                     metadata={"review_type": "self", "trigger": "hire_day"},
                 )
-                result.emails_prepared += 1
+                if notification_created:
+                    result.notifications_created += 1
 
         for period in periods:
             if period.month_period == 0:
@@ -219,14 +328,15 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                 )
                 if created_answers:
                     result.created_peer_reviews += 1
-                    _create_review_log(
+                    _, notification_created = _create_review_log(
                         employer=employer,
                         respondent=respondent,
                         period=period,
                         context=ReviewLog.CONTEXT_SKILL,
                         metadata={"review_type": "peer", "period": period.month_period},
                     )
-                    result.emails_prepared += 1
+                    if notification_created:
+                        result.notifications_created += 1
 
     return result.as_dict()
 
@@ -362,6 +472,14 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
         review_log.status = ReviewLog.STATUS_PENDING
         review_log.metadata = {**(review_log.metadata or {}), "save_mode": "partial"}
     review_log.save(update_fields=["status", "metadata", "updated_at"])
+
+    if not partial:
+        now = timezone.now()
+        SiteNotification.objects.filter(related_log=review_log).update(
+            is_read=True,
+            read_at=now,
+            updated_at=now,
+        )
 
     return {
         "status": "success",
@@ -644,6 +762,8 @@ def trigger_task_reviews(current_date: date, task: Optional[ReviewTask] = None) 
         respondents = _task_respondents(employer, active_employers)
         respondents.add(employer)
 
+        notifications_for_task = 0
+
         for respondent in respondents:
             for question in questions:
                 TaskReviewAnswer.objects.get_or_create(
@@ -653,13 +773,15 @@ def trigger_task_reviews(current_date: date, task: Optional[ReviewTask] = None) 
                     question=question,
                     defaults={"grade": 0},
                 )
-            _create_review_log(
+            _, created_notification = _create_review_log(
                 employer=employer,
                 respondent=respondent,
                 period=None,
                 context=ReviewLog.CONTEXT_TASK,
-                metadata={"task_id": str(task_obj.id)},
+                metadata={"task_id": str(task_obj.id), "task_title": task_obj.title},
             )
+            if created_notification:
+                notifications_for_task += 1
 
         task_obj.status = "review"
         task_obj.save(update_fields=["status", "updated_at"])
@@ -667,6 +789,7 @@ def trigger_task_reviews(current_date: date, task: Optional[ReviewTask] = None) 
         results.append({
             "task_id": str(task_obj.id),
             "respondents": [r.id for r in respondents],
+            "notifications_created": notifications_for_task,
         })
 
     return results
@@ -783,6 +906,13 @@ def submit_task_answers(token: str, answers: List[Dict]) -> Dict:
     review_log.status = ReviewLog.STATUS_COMPLETED
     review_log.metadata = {**(review_log.metadata or {}), "submitted_at": timezone.now().isoformat()}
     review_log.save(update_fields=["status", "metadata", "updated_at"])
+
+    now = timezone.now()
+    SiteNotification.objects.filter(related_log=review_log).update(
+        is_read=True,
+        read_at=now,
+        updated_at=now,
+    )
 
     remaining = TaskReviewAnswer.objects.filter(task=task, grade=0).exists()
     if not remaining:

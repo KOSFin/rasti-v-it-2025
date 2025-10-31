@@ -4,6 +4,7 @@ import { FiUser, FiLogOut, FiMoon, FiSun } from 'react-icons/fi';
 import { logout } from '../../api/services';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import NotificationBell from './NotificationBell';
 import './Header.css';
 
 const Header = () => {
@@ -41,6 +42,7 @@ const Header = () => {
         </div>
 
         <div className="header-actions">
+          <NotificationBell />
           <button
             onClick={toggleTheme}
             className="icon-btn"

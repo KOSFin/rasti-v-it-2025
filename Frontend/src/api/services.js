@@ -173,3 +173,13 @@ export const getTaskReviewForm = (token) =>
 
 export const submitTaskReview = (data) =>
   api.post('/api/performance/task-review/submit/', data);
+
+// Notifications
+export const getNotifications = (params) =>
+  api.get('/api/performance/notifications/', { params });
+
+export const markNotificationRead = (id) =>
+  api.post(`/api/performance/notifications/${id}/read/`);
+
+export const markAllNotificationsRead = () =>
+  api.post('/api/performance/notifications/mark-all/');

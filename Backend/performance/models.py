@@ -319,3 +319,44 @@ class TeamRelation(TimeStampedModel):
     class Meta:
         unique_together = ("employer", "peer")
         indexes = [models.Index(fields=["employer"])]
+
+
+class SiteNotification(TimeStampedModel):
+    """Stores in-product notifications delivered to respondents instead of emails."""
+
+    CONTEXT_GENERAL = "general"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    recipient = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="notifications")
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    context = models.CharField(
+        max_length=20,
+        choices=ReviewLog.CONTEXT_CHOICES + ((CONTEXT_GENERAL, "General"),),
+        default=CONTEXT_GENERAL,
+    )
+    link = models.CharField(max_length=500, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    related_log = models.ForeignKey(
+        ReviewLog,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["recipient", "is_read"]),
+            models.Index(fields=["context"]),
+        ]
+
+    def mark_read(self) -> None:
+        if self.is_read:
+            return
+        self.is_read = True
+        self.read_at = timezone.now()
+        self.save(update_fields=["is_read", "read_at", "updated_at"])

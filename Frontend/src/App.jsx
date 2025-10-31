@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/layout/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -13,6 +14,8 @@ import Team from './components/Team';
 import Reports from './components/Reports';
 import AdminUsers from './components/AdminUsers';
 import AdminDepartments from './components/AdminDepartments';
+import SkillReview from './components/reviews/SkillReview';
+import TaskReview from './components/reviews/TaskReview';
 import './App.css';
 
 function PrivateRoute({ children, requireAdmin = false, requireManager = false }) {
@@ -51,8 +54,9 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-          <Routes>
+        <NotificationProvider>
+          <Router>
+            <Routes>
             <Route path="/login" element={<Login />} />
             <Route
               path="/dashboard"
@@ -91,6 +95,22 @@ function App() {
               element={
                 <PrivateRoute>
                   <Feedback360 />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/reviews/skills/:token"
+              element={
+                <PrivateRoute>
+                  <SkillReview />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/reviews/tasks/:token"
+              element={
+                <PrivateRoute>
+                  <TaskReview />
                 </PrivateRoute>
               }
             />
@@ -136,8 +156,9 @@ function App() {
             />
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route path="*" element={<Navigate to="/dashboard" />} />
-          </Routes>
-        </Router>
+            </Routes>
+          </Router>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

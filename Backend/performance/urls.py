@@ -12,4 +12,15 @@ urlpatterns = [
     path("task-review/start/", views.TaskReviewTriggerView.as_view(), name="task-review-start"),
     path("task-review/form/", views.TaskReviewFormView.as_view(), name="task-review-form"),
     path("task-review/submit/", views.TaskReviewSubmitView.as_view(), name="task-review-submit"),
+    path("notifications/", views.NotificationListView.as_view(), name="notifications"),
+    path(
+        "notifications/<uuid:notification_id>/read/",
+        views.NotificationMarkReadView.as_view(),
+        name="notification-read",
+    ),
+    path(
+        "notifications/mark-all/",
+        views.NotificationMarkAllView.as_view(),
+        name="notifications-mark-all",
+    ),
 ]
