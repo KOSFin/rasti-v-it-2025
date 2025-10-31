@@ -144,3 +144,32 @@ export const calculateFinalScore = (id) =>
 
 export const getFinalReviewStatistics = () => 
   api.get('/api/final-reviews/statistics/');
+
+// Performance Review (360 + Self)
+export const initiateReviewCycle = (payload) =>
+  api.post('/api/performance/review/initiate/', payload);
+
+export const getReviewFormByToken = (token) =>
+  api.get('/api/performance/review/form/', { params: { token } });
+
+export const submitReviewAnswers = (data) =>
+  api.post('/api/performance/review/submit/', data);
+
+export const getReviewAnalytics = (params) =>
+  api.get('/api/performance/review/analytics/', { params });
+
+export const getAdaptationIndex = (params) =>
+  api.get('/api/performance/review/adaptation-index/', { params });
+
+// Task & Goal Review
+export const createReviewGoal = (data) =>
+  api.post('/api/performance/task-goal/create/', data);
+
+export const triggerTaskReview = (data) =>
+  api.post('/api/performance/task-review/start/', data);
+
+export const getTaskReviewForm = (token) =>
+  api.get('/api/performance/task-review/form/', { params: { token } });
+
+export const submitTaskReview = (data) =>
+  api.post('/api/performance/task-review/submit/', data);

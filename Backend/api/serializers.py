@@ -138,10 +138,13 @@ class TaskSerializer(serializers.ModelSerializer):
 class SelfAssessmentSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     task_title = serializers.CharField(source='task.title', read_only=True)
-    
+
     class Meta:
         model = SelfAssessment
         fields = '__all__'
+        extra_kwargs = {
+            'employee': {'required': False},
+        }
 
 class Feedback360Serializer(serializers.ModelSerializer):
     assessor_name = serializers.CharField(source='assessor.user.get_full_name', read_only=True)

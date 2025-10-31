@@ -101,13 +101,19 @@ function SelfAssessment() {
       return;
     }
 
+    if (!employee?.id) {
+      setError('Профиль сотрудника не загружен. Обновите страницу и попробуйте снова.');
+      return;
+    }
+
     setSaving(true);
 
     try {
       // Добавляем employee ID из контекста - обязательное поле для API
       const payload = {
         ...formData,
-        employee: employee?.id,
+        employee: employee.id,
+        task: Number(formData.task),
       };
       
       await createSelfAssessment(payload);
