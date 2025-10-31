@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiUser, FiLogOut, FiMoon, FiSun } from 'react-icons/fi';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import './Header.css';
 
 const Header = ({ user, employee }) => {
