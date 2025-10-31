@@ -2,12 +2,12 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import './Layout.css';
 
-const Layout = ({ children, user, employee }) => {
+const Layout = ({ children }) => {
   return (
     <div className="layout">
-      <Header user={user} employee={employee} />
+      <Header />
       <div className="layout-container">
-        <Sidebar employee={employee} />
+        <Sidebar />
         <main className="main-content">
           {children}
         </main>

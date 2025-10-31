@@ -1,208 +1,312 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { FiPlus, FiList, FiCheckSquare, FiTrash2 } from 'react-icons/fi';
 import { getTasks, getGoals, createTask, updateTask, deleteTask } from '../api/services';
 import './Common.css';
 
+const extractResults = (response) => {
+  if (!response?.data) {
+    return [];
+  }
+  if (Array.isArray(response.data?.results)) {
+    return response.data.results;
+  }
+  return Array.isArray(response.data) ? response.data : response.data?.results || [];
+};
+
+const defaultForm = {
+  goal: '',
+  title: '',
+  description: '',
+  is_completed: false,
+};
+
 function Tasks() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const goalId = searchParams.get('goal');
-  
+  const filterGoalParam = searchParams.get('goal');
+
   const [tasks, setTasks] = useState([]);
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    goal: goalId || '',
-    title: '',
-    description: '',
-    is_completed: false,
-  });
+  const [formData, setFormData] = useState(defaultForm);
+  const [saving, setSaving] = useState(false);
+  const [filterGoal, setFilterGoal] = useState(filterGoalParam || 'all');
+  const [filterStatus, setFilterStatus] = useState('active');
 
   useEffect(() => {
-    fetchData();
-  }, [goalId]);
+    setFilterGoal(filterGoalParam || 'all');
+  }, [filterGoalParam]);
 
-  const fetchData = async () => {
+  const loadData = async () => {
+    setLoading(true);
+    setError('');
+
     try {
-      const params = goalId ? { goal: goalId } : {};
       const [tasksRes, goalsRes] = await Promise.all([
-        getTasks(params),
-        getGoals(),
+        getTasks({ page_size: 400 }),
+        getGoals({ page_size: 200, ordering: '-created_at' }),
       ]);
-      setTasks(tasksRes.data.results || tasksRes.data);
-      setGoals(goalsRes.data.results || goalsRes.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching data:', error);
+
+      setTasks(extractResults(tasksRes));
+      setGoals(extractResults(goalsRes));
+    } catch (err) {
+      console.error('Не удалось загрузить задачи', err);
+      setError('Не удалось загрузить задачи. Попробуйте обновить страницу.');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setFormData({
-      ...formData,
-      [e.target.name]: value,
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const goalMap = useMemo(() => {
+    return goals.reduce((acc, goal) => {
+      acc[goal.id] = goal;
+      return acc;
+    }, {});
+  }, [goals]);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const matchesGoal = filterGoal === 'all' || String(task.goal) === String(filterGoal);
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'active' && !task.is_completed) ||
+        (filterStatus === 'completed' && task.is_completed);
+      return matchesGoal && matchesStatus;
     });
-  };
+  }, [tasks, filterGoal, filterStatus]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await createTask(formData);
-      setShowForm(false);
-      setFormData({
-        goal: goalId || '',
-        title: '',
-        description: '',
-        is_completed: false,
-      });
-      fetchData();
-    } catch (error) {
-      console.error('Error creating task:', error);
-      alert('Ошибка при создании задачи');
-    }
-  };
-
-  const handleToggleComplete = async (task) => {
-    try {
-      await updateTask(task.id, { ...task, is_completed: !task.is_completed });
-      fetchData();
-    } catch (error) {
-      console.error('Error updating task:', error);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Вы уверены, что хотите удалить эту задачу?')) {
-      try {
-        await deleteTask(id);
-        fetchData();
-      } catch (error) {
-        console.error('Error deleting task:', error);
+  const groupedTasks = useMemo(() => {
+    return filteredTasks.reduce((acc, task) => {
+      const key = task.goal;
+      if (!acc[key]) {
+        acc[key] = [];
       }
+      acc[key].push(task);
+      return acc;
+    }, {});
+  }, [filteredTasks]);
+
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!formData.goal) {
+      setError('Выберите цель для задачи.');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await createTask({
+        ...formData,
+        goal: Number(formData.goal),
+      });
+      setFormData(defaultForm);
+      setShowForm(false);
+      await loadData();
+    } catch (err) {
+      console.error('Не удалось создать задачу', err);
+      setError('Создание задачи не удалось. Попробуйте ещё раз.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) {
-    return <div className="loading">Загрузка...</div>;
-  }
+  const handleToggle = async (task) => {
+    try {
+      await updateTask(task.id, {
+        goal: task.goal,
+        title: task.title,
+        description: task.description,
+        is_completed: !task.is_completed,
+      });
+      await loadData();
+    } catch (err) {
+      console.error('Не удалось обновить задачу', err);
+      setError('Обновление задачи не удалось.');
+    }
+  };
+
+  const handleDelete = async (taskId) => {
+    if (!window.confirm('Удалить задачу?')) {
+      return;
+    }
+
+    try {
+      await deleteTask(taskId);
+      await loadData();
+    } catch (err) {
+      console.error('Не удалось удалить задачу', err);
+      setError('Удаление задачи не удалось.');
+    }
+  };
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="btn-back">
-          ← Назад
-        </button>
-        <h1>Задачи</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
-          {showForm ? 'Отмена' : '+ Добавить задачу'}
-        </button>
-      </div>
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <h1>Задачи</h1>
+          <p className="page-subtitle">Следите за прогрессом по ключевым задачам и закрывайте их вовремя</p>
+        </div>
+        <div className="page-actions">
+          <div className="input-with-icon select">
+            <FiList size={16} />
+            <select value={filterGoal} onChange={(event) => setFilterGoal(event.target.value)}>
+              <option value="all">Все цели</option>
+              {goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>
+                  {goal.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="input-with-icon select">
+            <FiCheckSquare size={16} />
+            <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
+              <option value="active">Активные</option>
+              <option value="completed">Выполненные</option>
+              <option value="all">Все задачи</option>
+            </select>
+          </div>
+          <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
+            <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Добавить задачу'}
+          </button>
+        </div>
+      </header>
+
+      {error && <div className="page-banner error">{error}</div>}
 
       {showForm && (
-        <div className="form-card">
-          <h2>Новая задача</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Выберите цель *</label>
-              <select
-                name="goal"
-                value={formData.goal}
-                onChange={handleChange}
-                required
-              >
-                <option value="">-- Выберите цель --</option>
+        <section className="panel">
+          <header className="panel-header">
+            <h2>Новая задача</h2>
+            <span>Привяжите задачу к цели, чтобы отслеживать прогресс</span>
+          </header>
+          <form className="form-grid" onSubmit={handleSubmit}>
+            <label className="form-field">
+              <span>Цель *</span>
+              <select name="goal" value={formData.goal} onChange={handleChange} required>
+                <option value="">Выберите цель</option>
                 {goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>
                     {goal.title}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="form-group">
-              <label>Название задачи *</label>
+            </label>
+            <label className="form-field">
+              <span>Название *</span>
               <input
                 type="text"
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
+                placeholder="Например, Подготовить презентацию для совета"
                 required
               />
-            </div>
-
-            <div className="form-group">
-              <label>Описание *</label>
+            </label>
+            <label className="form-field span-2">
+              <span>Описание *</span>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                rows="4"
+                rows={4}
+                placeholder="Опишите ожидаемый результат и ключевые шаги"
                 required
               />
+            </label>
+            <label className="form-field checkbox">
+              <input
+                type="checkbox"
+                name="is_completed"
+                checked={formData.is_completed}
+                onChange={handleChange}
+              />
+              <span>Задача уже выполнена</span>
+            </label>
+            <div className="form-actions">
+              <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>
+                Отменить
+              </button>
+              <button type="submit" className="btn primary" disabled={saving}>
+                {saving ? 'Сохраняем…' : 'Создать задачу'}
+              </button>
             </div>
-
-            <div className="form-group">
-              <label className="checkbox-item">
-                <input
-                  type="checkbox"
-                  name="is_completed"
-                  checked={formData.is_completed}
-                  onChange={handleChange}
-                />
-                Задача выполнена
-              </label>
-            </div>
-
-            <button type="submit" className="btn-primary">
-              Создать задачу
-            </button>
           </form>
-        </div>
+        </section>
       )}
 
-      <div className="content-section">
-        {tasks.length === 0 ? (
-          <div className="empty-state">
-            <p>Задач не найдено</p>
-            <button onClick={() => setShowForm(true)} className="btn-primary">
-              Создать первую задачу
+      <section className="page-section">
+        {loading ? (
+          <div className="panel placeholder">Загружаем задачи…</div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="panel empty">
+            <p>По выбранным фильтрам задачи не найдены.</p>
+            <button type="button" className="btn ghost" onClick={() => setShowForm(true)}>
+              Добавить задачу
             </button>
           </div>
         ) : (
-          <div className="items-grid">
-            {tasks.map((task) => (
-              <div 
-                key={task.id} 
-                className={`item-card ${task.is_completed ? 'completed-task' : ''}`}
-              >
-                <div className="item-header">
-                  <h3 style={{ textDecoration: task.is_completed ? 'line-through' : 'none' }}>
-                    {task.title}
-                  </h3>
-                  {task.is_completed && (
-                    <span className="badge badge-strategic">✓ Выполнена</span>
-                  )}
-                </div>
-                <p className="item-description">{task.description}</p>
-                <div className="item-actions">
-                  <button 
-                    onClick={() => handleToggleComplete(task)} 
-                    className="btn-secondary"
-                  >
-                    {task.is_completed ? 'Отметить как невыполненную' : 'Отметить выполненной'}
-                  </button>
-                  <button onClick={() => handleDelete(task.id)} className="btn-danger">
-                    Удалить
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="cards-grid">
+            {Object.entries(groupedTasks).map(([goalId, goalTasks]) => {
+              const goal = goalMap[goalId];
+              const total = goalTasks.length;
+              const completed = goalTasks.filter((task) => task.is_completed).length;
+              const percentage = total ? Math.round((completed / total) * 100) : 0;
+
+              return (
+                <article key={goalId} className="card task-card">
+                  <header className="card-header">
+                    <div>
+                      <h3>{goal?.title || 'Без цели'}</h3>
+                      <span className="card-meta">
+                        {goal?.goal_type === 'strategic' ? 'Стратегическая цель' : goal?.goal_type === 'personal' ? 'Личное развитие' : 'Тактическая задача'}
+                      </span>
+                    </div>
+                    <span className="card-progress">{percentage}%</span>
+                  </header>
+                  <ul className="task-list">
+                    {goalTasks.map((task) => (
+                      <li key={task.id} className={task.is_completed ? 'done' : ''}>
+                        <button
+                          type="button"
+                          className="task-toggle"
+                          onClick={() => handleToggle(task)}
+                          aria-pressed={task.is_completed}
+                        >
+                          <span className="checkbox" />
+                          <div>
+                            <strong>{task.title}</strong>
+                            <span>{task.description}</span>
+                          </div>
+                        </button>
+                        <button type="button" className="icon-btn" onClick={() => handleDelete(task.id)}>
+                          <FiTrash2 size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

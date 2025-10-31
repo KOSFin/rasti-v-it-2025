@@ -1,221 +1,322 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getPendingFeedback360, getFeedback360ForMe, getTasks, createFeedback360 } from '../api/services';
+import { useEffect, useMemo, useState } from 'react';
+import { FiPlus, FiUsers, FiTarget, FiSend } from 'react-icons/fi';
+import {
+  getPendingFeedback360,
+  getFeedback360ForMe,
+  getFeedback360List,
+  getTasks,
+  createFeedback360,
+} from '../api/services';
 import './Common.css';
 
+const extractResults = (response) => {
+  if (!response?.data) {
+    return [];
+  }
+  if (Array.isArray(response.data?.results)) {
+    return response.data.results;
+  }
+  return Array.isArray(response.data) ? response.data : response.data?.results || [];
+};
+
+const DEFAULT_FORM = {
+  employee: '',
+  task: '',
+  results_achievement: 5,
+  personal_qualities: '',
+  collaboration_quality: 5,
+  improvements_suggested: '',
+};
+
 function Feedback360() {
-  const navigate = useNavigate();
-  const [colleagues, setColleagues] = useState([]);
-  const [myFeedbacks, setMyFeedbacks] = useState([]);
+  const [pendingColleagues, setPendingColleagues] = useState([]);
+  const [feedbackAboutMe, setFeedbackAboutMe] = useState([]);
+  const [feedbackIGave, setFeedbackIGave] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    employee: '',
-    task: '',
-    results_achievement: 5,
-    personal_qualities: '',
-    collaboration_quality: 5,
-    improvements_suggested: '',
-  });
+  const [formData, setFormData] = useState(DEFAULT_FORM);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const loadData = async () => {
+    setLoading(true);
+    setError('');
 
-  const fetchData = async () => {
     try {
-      const [colleaguesRes, feedbacksRes, tasksRes] = await Promise.all([
+      const [pendingRes, forMeRes, tasksRes, givenRes] = await Promise.all([
         getPendingFeedback360(),
         getFeedback360ForMe(),
-        getTasks(),
+        getTasks({ page_size: 200 }),
+        getFeedback360List({ page_size: 200, ordering: '-created_at' }),
       ]);
-      setColleagues(colleaguesRes.data);
-      setMyFeedbacks(feedbacksRes.data);
-      setTasks(tasksRes.data.results || tasksRes.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching data:', error);
+
+      setPendingColleagues(Array.isArray(pendingRes?.data) ? pendingRes.data : extractResults(pendingRes));
+      setFeedbackAboutMe(Array.isArray(forMeRes?.data) ? forMeRes.data : extractResults(forMeRes));
+      setTasks(extractResults(tasksRes));
+      setFeedbackIGave(extractResults(givenRes));
+    } catch (err) {
+      console.error('Не удалось загрузить данные 360', err);
+      setError('Не удалось загрузить данные. Попробуйте позже.');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    const value = e.target.type === 'number' ? parseInt(e.target.value) : e.target.value;
-    setFormData({
-      ...formData,
-      [e.target.name]: value,
-    });
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const metrics = useMemo(() => {
+    const avgScore = feedbackAboutMe.length
+      ? (feedbackAboutMe.reduce((acc, item) => acc + (item.calculated_score || 0), 0) / feedbackAboutMe.length).toFixed(1)
+      : '0.0';
+
+    return {
+      pending: pendingColleagues.length,
+      received: feedbackAboutMe.length,
+      sent: feedbackIGave.length,
+      averageScore: avgScore,
+    };
+  }, [pendingColleagues, feedbackAboutMe, feedbackIGave]);
+
+  const handleChange = (event) => {
+    const { name, value, type } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!formData.employee || !formData.task) {
+      setError('Выберите сотрудника и задачу.');
+      return;
+    }
+
+    setSaving(true);
+
     try {
       await createFeedback360(formData);
+      setFormData(DEFAULT_FORM);
       setShowForm(false);
-      setFormData({
-        employee: '',
-        task: '',
-        results_achievement: 5,
-        personal_qualities: '',
-        collaboration_quality: 5,
-        improvements_suggested: '',
-      });
-      fetchData();
-    } catch (error) {
-      console.error('Error creating feedback:', error);
-      alert('Ошибка при создании оценки');
+      await loadData();
+    } catch (err) {
+      console.error('Не удалось отправить оценку', err);
+      setError('Не удалось отправить оценку. Попробуйте позже.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) {
-    return <div className="loading">Загрузка...</div>;
-  }
-
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="btn-back">
-          ← Назад
-        </button>
-        <h1>Обратная связь 360°</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
-          {showForm ? 'Отмена' : '+ Дать оценку'}
-        </button>
-      </div>
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <h1>Обратная связь 360°</h1>
+          <p className="page-subtitle">Получайте и давайте развивающую обратную связь коллегам</p>
+        </div>
+        <div className="page-actions">
+          <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
+            <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Новая оценка'}
+          </button>
+        </div>
+      </header>
+
+      {error && <div className="page-banner error">{error}</div>}
+
+      <section className="insights-grid">
+        <article className="insight-card">
+          <h3>Нужно оценить</h3>
+          <p className="insight-number warning">{metrics.pending}</p>
+          <p className="insight-meta">Коллег ожидают обратной связи</p>
+        </article>
+        <article className="insight-card">
+          <h3>Получено</h3>
+          <p className="insight-number accent">{metrics.received}</p>
+          <p className="insight-meta">Средний балл {metrics.averageScore}</p>
+        </article>
+        <article className="insight-card">
+          <h3>Отправлено</h3>
+          <p className="insight-number success">{metrics.sent}</p>
+          <p className="insight-meta">Оценок коллегам за период</p>
+        </article>
+      </section>
 
       {showForm && (
-        <div className="form-card">
-          <h2>Оценка коллеги</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Выберите сотрудника *</label>
-              <select
-                name="employee"
-                value={formData.employee}
-                onChange={handleChange}
-                required
-              >
-                <option value="">-- Выберите сотрудника --</option>
-                {colleagues.map((colleague) => (
+        <section className="panel">
+          <header className="panel-header">
+            <h2>Заполнить оценку</h2>
+            <span>Выберите коллегу и задачу, чтобы оставить обратную связь</span>
+          </header>
+          <form className="form-grid" onSubmit={handleSubmit}>
+            <label className="form-field">
+              <span>Коллега *</span>
+              <select name="employee" value={formData.employee} onChange={handleChange} required>
+                <option value="">Выберите коллегу</option>
+                {pendingColleagues.map((colleague) => (
                   <option key={colleague.id} value={colleague.id}>
-                    {colleague.full_name} - {colleague.position}
+                    {colleague.full_name} · {colleague.position}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="form-group">
-              <label>Выберите задачу *</label>
-              <select
-                name="task"
-                value={formData.task}
-                onChange={handleChange}
-                required
-              >
-                <option value="">-- Выберите задачу --</option>
+            </label>
+            <label className="form-field">
+              <span>Задача *</span>
+              <select name="task" value={formData.task} onChange={handleChange} required>
+                <option value="">Выберите задачу</option>
                 {tasks.map((task) => (
                   <option key={task.id} value={task.id}>
                     {task.title}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="form-group">
-              <label>Достижение результатов (0-10) *</label>
+            </label>
+            <label className="form-field">
+              <span>Достижение результатов *</span>
               <input
                 type="number"
+                min={0}
+                max={10}
                 name="results_achievement"
                 value={formData.results_achievement}
                 onChange={handleChange}
-                min="0"
-                max="10"
                 required
               />
-              <small>Текущее значение: {formData.results_achievement}</small>
-            </div>
-
-            <div className="form-group">
-              <label>Личные качества *</label>
+              <small>Баллы от 0 до 10</small>
+            </label>
+            <label className="form-field">
+              <span>Качество сотрудничества *</span>
+              <input
+                type="number"
+                min={0}
+                max={10}
+                name="collaboration_quality"
+                value={formData.collaboration_quality}
+                onChange={handleChange}
+                required
+              />
+              <small>Баллы от 0 до 10</small>
+            </label>
+            <label className="form-field span-2">
+              <span>Личные качества *</span>
               <textarea
                 name="personal_qualities"
                 value={formData.personal_qualities}
                 onChange={handleChange}
-                rows="4"
-                placeholder="Опишите личные качества сотрудника"
+                rows={3}
+                placeholder="Опишите сильные стороны и поведение коллеги"
                 required
               />
-            </div>
-
-            <div className="form-group">
-              <label>Качество сотрудничества (0-10) *</label>
-              <input
-                type="number"
-                name="collaboration_quality"
-                value={formData.collaboration_quality}
-                onChange={handleChange}
-                min="0"
-                max="10"
-                required
-              />
-              <small>Текущее значение: {formData.collaboration_quality}</small>
-            </div>
-
-            <div className="form-group">
-              <label>Рекомендации по улучшению *</label>
+            </label>
+            <label className="form-field span-2">
+              <span>Рекомендации по развитию *</span>
               <textarea
                 name="improvements_suggested"
                 value={formData.improvements_suggested}
                 onChange={handleChange}
-                rows="3"
-                placeholder="Что можно улучшить"
+                rows={3}
+                placeholder="Что поможет коллегe развиваться дальше?"
                 required
               />
+            </label>
+            <div className="form-actions">
+              <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>
+                Отменить
+              </button>
+              <button type="submit" className="btn primary" disabled={saving}>
+                {saving ? 'Отправляем…' : 'Отправить оценку'}
+              </button>
             </div>
-
-            <button type="submit" className="btn-primary">
-              Отправить оценку
-            </button>
           </form>
-        </div>
+        </section>
       )}
 
-      <div className="content-section">
-        <h2>Оценки обо мне</h2>
-        {myFeedbacks.length === 0 ? (
-          <div className="empty-state">
-            <p>Пока нет оценок</p>
-          </div>
+      <section className="page-section feedback-layout">
+        {loading ? (
+          <div className="panel placeholder">Загружаем оценки…</div>
         ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>От кого</th>
-                  <th>Задача</th>
-                  <th>Дата</th>
-                  <th>Балл</th>
-                  <th>Достижения</th>
-                  <th>Сотрудничество</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myFeedbacks.map((feedback) => (
-                  <tr key={feedback.id}>
-                    <td>{feedback.assessor_name}</td>
-                    <td>{feedback.task_title}</td>
-                    <td>{new Date(feedback.created_at).toLocaleDateString('ru-RU')}</td>
-                    <td><strong>{feedback.calculated_score}</strong></td>
-                    <td>{feedback.results_achievement}/10</td>
-                    <td>{feedback.collaboration_quality}/10</td>
-                  </tr>
+          <>
+            <article className="panel">
+              <header className="panel-header">
+                <h2>
+                  <FiUsers size={18} /> Ожидают вашей оценки
+                </h2>
+                <span>{pendingColleagues.length}</span>
+              </header>
+              <ul className="list">
+                {pendingColleagues.length === 0 && <li className="empty">Все коллеги уже оценены</li>}
+                {pendingColleagues.map((colleague) => (
+                  <li key={colleague.id}>
+                    <div>
+                      <strong>{colleague.full_name}</strong>
+                      <span>{colleague.position}</span>
+                    </div>
+                    <button type="button" className="btn ghost" onClick={() => {
+                      setFormData((prev) => ({ ...prev, employee: colleague.id }));
+                      setShowForm(true);
+                    }}>
+                      Оценить
+                    </button>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </ul>
+            </article>
+
+            <article className="panel">
+              <header className="panel-header">
+                <h2>
+                  <FiTarget size={18} /> Оценки о вас
+                </h2>
+                <span>{feedbackAboutMe.length}</span>
+              </header>
+              <ul className="list detailed">
+                {feedbackAboutMe.length === 0 && <li className="empty">Пока нет оценок</li>}
+                {feedbackAboutMe.map((feedback) => (
+                  <li key={feedback.id}>
+                    <div>
+                      <strong>{feedback.assessor_name}</strong>
+                      <span>{feedback.task_title}</span>
+                    </div>
+                    <div className="tag-group">
+                      <span className="tag accent">Итог {feedback.calculated_score}</span>
+                      <span className="tag">Результат {feedback.results_achievement}/10</span>
+                      <span className="tag">Сотрудничество {feedback.collaboration_quality}/10</span>
+                      <span className="tag muted">{new Date(feedback.created_at).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="panel">
+              <header className="panel-header">
+                <h2>
+                  <FiSend size={18} /> Ваши оценки
+                </h2>
+                <span>{feedbackIGave.length}</span>
+              </header>
+              <ul className="list detailed">
+                {feedbackIGave.length === 0 && <li className="empty">Вы ещё не отправляли оценки</li>}
+                {feedbackIGave.map((feedback) => (
+                  <li key={feedback.id}>
+                    <div>
+                      <strong>{feedback.employee_name}</strong>
+                      <span>{feedback.task_title}</span>
+                    </div>
+                    <div className="tag-group">
+                      <span className="tag accent">{feedback.calculated_score} баллов</span>
+                      <span className="tag muted">{new Date(feedback.created_at).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

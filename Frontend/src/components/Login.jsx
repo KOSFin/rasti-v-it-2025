@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { FiUser, FiLock, FiLogIn, FiMoon, FiSun } from 'react-icons/fi';
 import { login } from '../api/services';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import './Auth.css';
 
 function Login() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { refreshProfile } = useAuth();
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -33,6 +35,7 @@ function Login() {
       localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       localStorage.setItem('employee', JSON.stringify(response.data.employee));
+      await refreshProfile();
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Ошибка входа. Проверьте данные.');
