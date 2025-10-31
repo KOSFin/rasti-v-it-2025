@@ -99,13 +99,27 @@ function Feedback360() {
     setSaving(true);
 
     try {
-      await createFeedback360(formData);
+      // Убедимся что employee передается как число
+      const payload = {
+        ...formData,
+        employee: Number(formData.employee),
+        task: Number(formData.task),
+        results_achievement: Number(formData.results_achievement),
+        collaboration_quality: Number(formData.collaboration_quality),
+      };
+      
+      await createFeedback360(payload);
       setFormData(DEFAULT_FORM);
       setShowForm(false);
       await loadData();
     } catch (err) {
       console.error('Не удалось отправить оценку', err);
-      setError('Не удалось отправить оценку. Попробуйте позже.');
+      const errorMessage = err.response?.data?.employee?.[0] 
+        || err.response?.data?.task?.[0]
+        || err.response?.data?.error 
+        || err.response?.data?.detail 
+        || 'Не удалось отправить оценку. Попробуйте позже.';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }

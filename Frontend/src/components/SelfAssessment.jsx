@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiPlus, FiAward, FiTrendingUp } from 'react-icons/fi';
 import { getTasks, getSelfAssessments, createSelfAssessment } from '../api/services';
+import { useAuth } from '../contexts/AuthContext';
 import './Common.css';
 
 const extractResults = (response) => {
@@ -24,6 +25,7 @@ const DEFAULT_FORM = {
 };
 
 function SelfAssessment() {
+  const { employee } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,13 +104,23 @@ function SelfAssessment() {
     setSaving(true);
 
     try {
-      await createSelfAssessment(formData);
+      // Добавляем employee ID из контекста - обязательное поле для API
+      const payload = {
+        ...formData,
+        employee: employee?.id,
+      };
+      
+      await createSelfAssessment(payload);
       setFormData(DEFAULT_FORM);
       setShowForm(false);
       await loadData();
     } catch (err) {
       console.error('Не удалось создать самооценку', err);
-      setError('Не удалось сохранить самооценку. Попробуйте ещё раз.');
+      const errorMessage = err.response?.data?.employee?.[0] 
+        || err.response?.data?.error 
+        || err.response?.data?.detail 
+        || 'Не удалось сохранить самооценку. Попробуйте ещё раз.';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }

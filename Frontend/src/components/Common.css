@@ -204,13 +204,40 @@
   color: #666;
   margin: 0 0 15px 0;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .item-meta {
   color: #888;
   font-size: 13px;
   margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+/* Улучшенные отступы для текстовых элементов */
+.card p,
+.panel p,
+.item-card p {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.card p:last-child,
+.panel p:last-child,
+.item-card p:last-child {
+  margin-bottom: 0;
+}
+
+.card strong,
+.panel strong,
+.item-card strong {
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.card-body p + p,
+.panel-body p + p {
+  margin-top: 12px;
 }
 
 .item-actions {
@@ -239,20 +266,24 @@
 }
 
 /* Таблицы */
-.table-container {
+.table-container,
+.table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 600px; /* Минимальная ширина для прокрутки */
 }
 
 table th,
 table td {
-  padding: 12px;
+  padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid #eee;
+  white-space: nowrap;
 }
 
 table th {
@@ -260,6 +291,9 @@ table th {
   font-weight: 600;
   color: #555;
   font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 table td {
@@ -290,6 +324,97 @@ table tr:hover {
   margin: 0;
 }
 
+/* Дополнительные улучшения отступов для панелей, карточек и форм */
+.panel {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 24px;
+}
+
+.panel-header {
+  margin-bottom: 20px;
+}
+
+.panel-header h2 {
+  margin: 0 0 6px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.panel-header span {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list li {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.list li:last-child {
+  border-bottom: none;
+}
+
+.list li strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.list li span {
+  display: block;
+  font-size: 14px;
+  color: #666;
+}
+
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #555;
+  white-space: nowrap;
+}
+
+.tag.accent {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.tag.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tag.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tag.muted {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 15px;
@@ -305,5 +430,9 @@ table tr:hover {
   
   .form-row {
     grid-template-columns: 1fr;
+  }
+  
+  .panel {
+    padding: 16px;
   }
 }

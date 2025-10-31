@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiPlus, FiList, FiCheckSquare, FiTrash2, FiUsers } from 'react-icons/fi';
-import { getTasks, getGoals, createTask, updateTask, deleteTask } from '../api/services';
+import { FiPlus, FiList, FiCheckSquare, FiUsers } from 'react-icons/fi';
+import { getTasks, getGoals, createTask, updateTask } from '../api/services';
 import './Common.css';
 
 const extractResults = (response) => {
@@ -157,20 +157,6 @@ function Tasks() {
     }
   };
 
-  const handleDelete = async (taskId) => {
-    if (!window.confirm('Удалить задачу?')) {
-      return;
-    }
-
-    try {
-      await deleteTask(taskId);
-      await loadData();
-    } catch (err) {
-      console.error('Не удалось удалить задачу', err);
-      setError('Удаление задачи не удалось.');
-    }
-  };
-
   return (
     <div className="page">
       <header className="page-header">
@@ -323,9 +309,6 @@ function Tasks() {
                             <strong>{task.title}</strong>
                             <span>{task.description}</span>
                           </div>
-                        </button>
-                        <button type="button" className="icon-btn" onClick={() => handleDelete(task.id)}>
-                          <FiTrash2 size={16} />
                         </button>
                       </li>
                     ))}
