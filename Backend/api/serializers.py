@@ -64,10 +64,10 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
 
         department = validated_data.pop('department', None)
         is_staff = validated_data.pop('is_staff', False)
-    username = (validated_data.pop('username', '') or '').strip().lower()
+        username = (validated_data.pop('username', '') or '').strip().lower()
         hire_date = validated_data.pop('hire_date', None)
 
-    email = validated_data['email']
+        email = validated_data['email']
         first_name = validated_data['first_name'].strip()
         last_name = validated_data['last_name'].strip()
         position = validated_data['position'].strip() or 'Сотрудник'
