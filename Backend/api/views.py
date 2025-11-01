@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q, Avg, Count
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import *
 from .serializers import *
@@ -262,6 +263,34 @@ class GoalViewSet(viewsets.ModelViewSet):
             Q(evaluation_notifications__recipient=employee)
         ).distinct()
     
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_value = self.kwargs.get(self.lookup_field)
+
+        try:
+            obj = queryset.get(**{self.lookup_field: lookup_value})
+        except Goal.DoesNotExist:
+            employee = Employee.objects.filter(user=self.request.user).first()
+            notification_exists = (
+                employee
+                and GoalEvaluationNotification.objects.filter(
+                    goal_id=lookup_value,
+                    recipient=employee
+                ).exists()
+            )
+            if not notification_exists:
+                raise
+
+            fallback_queryset = Goal.objects.prefetch_related(
+                'tasks',
+                'goal_participants__employee__user',
+                'goal_participants__employee__department'
+            ).select_related('employee__user', 'employee__department', 'created_by__user')
+            obj = get_object_or_404(fallback_queryset, **{self.lookup_field: lookup_value})
+
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def perform_create(self, serializer):
         user = self.request.user
         current_employee = Employee.objects.filter(user=user).first()

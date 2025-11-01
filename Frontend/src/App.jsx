@@ -17,10 +17,11 @@ import SkillReview from './components/reviews/SkillReview';
 import TaskReview from './components/reviews/TaskReview';
 import './App.css';
 
-function PrivateRoute({ children, requireAdmin = false, requireManager = false }) {
+function PrivateRoute({ children, requireAdmin = false, requireManager = false, allowRoles = null }) {
   const { user, employee, loading, pendingReview } = useAuth();
   const location = useLocation();
   const token = localStorage.getItem('access_token');
+  const role = employee?.role || (user?.is_superuser ? 'admin' : null);
 
   if (loading) {
     return (
@@ -45,6 +46,13 @@ function PrivateRoute({ children, requireAdmin = false, requireManager = false }
 
   if (requireManager && !(employee?.is_manager || user?.is_superuser)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (allowRoles && !user?.is_superuser) {
+    const normalizedRoles = Array.isArray(allowRoles) ? allowRoles : [allowRoles];
+    if (!normalizedRoles.includes(role)) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   const requiresInitialReview =
@@ -133,7 +141,7 @@ function App() {
             <Route
               path="/nine-box"
               element={
-                <PrivateRoute>
+                <PrivateRoute allowRoles={['admin', 'manager', 'business_partner']}>
                   <NineBox />
                 </PrivateRoute>
               }

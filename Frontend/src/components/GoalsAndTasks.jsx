@@ -70,7 +70,7 @@ const initialGoalForm = {
   end_date: getDateAfterWeek(),
   expected_results: '',
   task_link: '',
-  employee: '',
+  participants: [],
   requires_evaluation: false,
 };
 
@@ -216,7 +216,7 @@ function GoalsAndTasks() {
     const initialAssignee = searchParams.get('employee');
     if (initialAssignee && canAssign) {
       setAssigneeFilter(initialAssignee);
-      setGoalFormData((prev) => ({ ...prev, employee: initialAssignee }));
+      setGoalFormData((prev) => ({ ...prev, participants: [initialAssignee] }));
       setShowGoalForm(true);
     }
   }, [canAssign, searchParams]);
@@ -320,10 +320,18 @@ function GoalsAndTasks() {
     [pendingSelfGoals]
   );
 
+  const ownerParticipantId = goalFormData.participants[0] || '';
+
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
       const matchesType = filterType === 'all' || goal.goal_type === filterType;
-      const matchesEmployee = assigneeFilter === 'all' || String(goal.employee) === String(assigneeFilter);
+      const participantsList = Array.isArray(goal.participants_info) ? goal.participants_info : [];
+      const matchesEmployee =
+        assigneeFilter === 'all' ||
+        String(goal.employee) === String(assigneeFilter) ||
+        participantsList.some(
+          (participant) => String(participant.employee) === String(assigneeFilter)
+        );
       const matchesSearch =
         goal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         goal.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -359,10 +367,22 @@ function GoalsAndTasks() {
   }, [filteredGoals, pendingSelfGoalIds]);
 
   const handleGoalFormChange = (event) => {
-    const { name, value, type, checked } = event.target;
-    setGoalFormData((prev) => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
+    const { name, value, type, checked, options } = event.target;
+
+    if (name === 'participants') {
+      const selected = Array.from(options)
+        .filter((option) => option.selected)
+        .map((option) => option.value);
+      setGoalFormData((prev) => ({
+        ...prev,
+        participants: selected,
+      }));
+      return;
+    }
+
+    setGoalFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
@@ -379,18 +399,28 @@ function GoalsAndTasks() {
 
     try {
       const payload = { ...goalFormData };
-      if (!canAssign || !payload.employee) {
-        delete payload.employee;
-      } else {
-        payload.employee = Number(payload.employee);
+      const participantIds = goalFormData.participants
+        .map((id) => Number(id))
+        .filter((id) => !Number.isNaN(id) && id > 0);
+
+      if (canAssign) {
+        if (participantIds.length === 0) {
+          setGoalFormError('Выберите хотя бы одного участника цели.');
+          setSavingGoal(false);
+          return;
+        }
+        payload.participant_ids = participantIds;
       }
+
+      delete payload.participants;
       if (!payload.task_link) delete payload.task_link;
 
       await createGoal(payload);
       setShowGoalForm(false);
       setGoalFormData({
         ...initialGoalForm,
-        employee: canAssign && assigneeFilter !== 'all' ? assigneeFilter : '',
+        participants:
+          canAssign && assigneeFilter !== 'all' ? [assigneeFilter] : [],
       });
       await loadData();
     } catch (err) {
@@ -647,6 +677,8 @@ function GoalsAndTasks() {
     const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
     const completedTasksTail = tasks.filter((task) => task.is_completed && !pendingTaskSet.has(task.id));
     const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
+    const participantsInfo = Array.isArray(goal.participants_info) ? goal.participants_info : [];
+    const ownerParticipant = participantsInfo.find((participant) => participant.is_owner);
 
     const daysUntil = getDaysUntilDeadline(goal.end_date);
     const isUrgent = daysUntil !== null && daysUntil < 7;
@@ -687,8 +719,10 @@ function GoalsAndTasks() {
             <h3>{goal.title}</h3>
             <div className="goal-meta">
               <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
-              {canAssign && goal.employee_name && (
-                <span className="meta-text">{goal.employee_name}</span>
+              {ownerParticipant && (
+                <span className="meta-text">
+                  Владелец: {ownerParticipant.employee_name}
+                </span>
               )}
               <span className="meta-text">
                 Создал: {goal.creator_type === 'manager' ? 'Руководитель' : 'Сотрудник'}
@@ -698,6 +732,22 @@ function GoalsAndTasks() {
               </span>
               {evaluationMeta && <span className="meta-text highlight">{evaluationMeta}</span>}
             </div>
+            {participantsInfo.length > 0 && (
+              <div className="goal-participants">
+                {participantsInfo.map((participant) => {
+                  const isSelfParticipant = Number(participant.employee) === Number(employee?.id);
+                  const chipClasses = ['participant-chip'];
+                  if (participant.is_owner) chipClasses.push('owner');
+                  if (isSelfParticipant) chipClasses.push('self');
+                  return (
+                    <span key={participant.id} className={chipClasses.join(' ')}>
+                      {participant.employee_name}
+                      {participant.position_name ? ` • ${participant.position_name}` : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="goal-dates">
             <div className="date-item">
@@ -823,6 +873,9 @@ function GoalsAndTasks() {
                       <div className="task-content">
                         <strong>{task.title}</strong>
                         <span>{task.description}</span>
+                        {task.is_completed && task.completed_by_name && (
+                          <span className="task-meta">Выполнил: {task.completed_by_name}</span>
+                        )}
                       </div>
                       {!goal.is_completed && (
                         <div className="task-actions">
@@ -931,22 +984,27 @@ function GoalsAndTasks() {
           </header>
           <form className="form-grid" onSubmit={handleGoalSubmit}>
             {canAssign && (
-              <label className="form-field">
-                <span>Сотрудник *</span>
+              <label className="form-field span-2">
+                <span>Участники цели *</span>
                 <select
-                  name="employee"
-                  value={goalFormData.employee}
+                  name="participants"
+                  multiple
+                  value={goalFormData.participants}
                   onChange={handleGoalFormChange}
                   required
-                  disabled={savingGoal}
+                  disabled={savingGoal || employees.length === 0}
+                  size={Math.min(6, Math.max(employees.length, 3))}
                 >
-                  <option value="">Выберите сотрудника</option>
                   {employees.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.full_name || item.username}
+                      {item.department_name ? ` • ${item.department_name}` : ''}
                     </option>
                   ))}
                 </select>
+                <small className="form-hint">
+                  Первый выбранный специалист станет владельцем цели. Удерживайте Ctrl/Cmd для множественного выбора.
+                </small>
               </label>
             )}
 
@@ -1028,7 +1086,7 @@ function GoalsAndTasks() {
               />
             </label>
 
-            {canAssign && goalFormData.employee && goalFormData.employee !== String(employee?.id) && (
+            {canAssign && ownerParticipantId && ownerParticipantId !== String(employee?.id) && (
               <label className="form-field checkbox span-2">
                 <input
                   type="checkbox"

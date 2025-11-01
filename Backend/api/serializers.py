@@ -318,6 +318,7 @@ class GoalSerializer(serializers.ModelSerializer):
 
 
 class SelfAssessmentSerializer(serializers.ModelSerializer):
+    employee = serializers.PrimaryKeyRelatedField(read_only=True)
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     goal_title = serializers.CharField(source='goal.title', read_only=True)
     goal_tasks = TaskSerializer(source='goal.tasks', many=True, read_only=True)

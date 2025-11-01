@@ -73,6 +73,36 @@
   align-items: center;
 }
 
+.goal-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.participant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  border: 1px solid var(--border-color);
+}
+
+.participant-chip.owner {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.participant-chip.self {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--color-success);
+}
+
 .meta-text {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -339,6 +369,45 @@
 
 .btn.success:hover {
   filter: brightness(0.9);
+}
+
+@media (max-width: 768px) {
+  .goal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .goal-meta {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .goal-participants {
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .participant-chip {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.65rem;
+  }
+
+  .goal-dates {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .goal-progress {
+    width: 100%;
+    text-align: left;
+  }
+
+  .goal-content {
+    padding: 0.75rem 1rem 1rem 1.5rem;
+  }
 }
 
 /* Modal styles */

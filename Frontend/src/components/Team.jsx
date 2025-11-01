@@ -149,7 +149,11 @@ function Team() {
     return members.filter((member) => {
       const fullName = member.full_name?.toLowerCase() || '';
       const email = member.email?.toLowerCase() || '';
-      const position = member.position?.toLowerCase() || '';
+      const position = (
+        member.position_name ||
+        member.position_title ||
+        ''
+      ).toLowerCase();
       const department = member.department_name?.toLowerCase() || '';
       return [fullName, email, position, department].some((value) => value.includes(query));
     });
@@ -298,7 +302,7 @@ function Team() {
                           <span>{member.email}</span>
                         </div>
                       </td>
-                      <td>{member.position || '—'}</td>
+                      <td>{member.position_name || member.position_title || '—'}</td>
                       <td>{member.department_name || '—'}</td>
                       <td>
                         <span className="metric">{goalsInfo.total}</span>

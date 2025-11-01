@@ -42,6 +42,9 @@ export const getEmployee = (id) =>
 export const getManagers = () => 
   api.get('/api/employees/managers/');
 
+export const updateEmployee = (id, data) =>
+  api.patch(`/api/employees/${id}/`, data);
+
 export const getTeam = (id) => 
   api.get(`/api/employees/${id}/team/`);
 
