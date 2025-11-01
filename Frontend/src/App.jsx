@@ -5,8 +5,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/layout/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import Goals from './components/Goals';
-import Tasks from './components/Tasks';
+import GoalsAndTasks from './components/GoalsAndTasks';
 import SelfAssessment from './components/SelfAssessment';
 import Feedback360 from './components/Feedback360';
 import NineBox from './components/NineBox';
@@ -87,7 +86,7 @@ function App() {
               path="/goals"
               element={
                 <PrivateRoute>
-                  <Goals />
+                  <GoalsAndTasks />
                 </PrivateRoute>
               }
             />
@@ -95,7 +94,7 @@ function App() {
               path="/tasks"
               element={
                 <PrivateRoute>
-                  <Tasks />
+                  <GoalsAndTasks />
                 </PrivateRoute>
               }
             />
