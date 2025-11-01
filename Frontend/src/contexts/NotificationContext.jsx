@@ -35,7 +35,13 @@ export const NotificationProvider = ({ children }) => {
       ]);
       
       const { results = [], unread_count: unread = 0 } = notifResponse.data || {};
-      const { count: goalCount = 0 } = goalCountResponse.data || {};
+      const goalData = goalCountResponse.data || {};
+      const goalCount =
+        typeof goalData.unread_count === 'number'
+          ? goalData.unread_count
+          : typeof goalData.count === 'number'
+            ? goalData.count
+            : 0;
       
       setNotifications(results);
       setUnreadCount(unread);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FiX, FiChevronDown, FiChevronRight, FiCheckCircle } from 'react-icons/fi';
 import { createFeedback360, createManagerReview } from '../api/services';
 import './GoalEvaluationModal.css';
@@ -17,7 +17,7 @@ const RATING_LEVELS = [
   { value: 10, label: '10 - Исключительно', description: 'Результат выдающийся' },
 ];
 
-function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) {
+function GoalEvaluationModal({ goal, isManager, onClose, onSuccess }) {
   const [expanded, setExpanded] = useState(true);
   const [formData, setFormData] = useState({
     results_achievement: 5,
@@ -34,6 +34,23 @@ function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const employeeInfo = useMemo(() => {
+    if (!goal) {
+      return { id: null, name: '' };
+    }
+
+    const id = goal.employee ?? goal.employee_id ?? goal.assignee?.id ?? null;
+    const name =
+      goal.employee_name ||
+      goal.employee_full_name ||
+      goal.employee_display ||
+      goal.assignee?.full_name ||
+      goal.assignee?.username ||
+      '';
+
+    return { id, name };
+  }, [goal]);
+
   const handleRatingChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -49,8 +66,12 @@ function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) 
     setError('');
 
     try {
+      if (!employeeInfo.id) {
+        throw new Error('Не удалось определить сотрудника для оценки. Обновите страницу и попробуйте снова.');
+      }
+
       const payload = {
-        employee: employee.id,
+        employee: employeeInfo.id,
         goal: goal.id,
         results_achievement: formData.results_achievement,
         personal_qualities: formData.personal_qualities,
@@ -63,6 +84,10 @@ function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) 
         payload.personal_contribution_feedback = formData.personal_contribution_feedback;
         payload.overall_rating = formData.overall_rating;
         payload.feedback_summary = formData.feedback_summary;
+        payload.promotion_recommended = formData.promotion_recommended;
+        if (formData.promotion_recommended) {
+          payload.development_plan = formData.development_plan;
+        }
         await createManagerReview(payload);
       } else {
         // Оценка 360
@@ -73,7 +98,8 @@ function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) 
       onClose();
     } catch (err) {
       console.error('Не удалось отправить оценку', err);
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Не удалось отправить оценку');
+      const apiError = err.response?.data?.error || err.response?.data?.detail;
+      setError(apiError || err.message || 'Не удалось отправить оценку');
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +122,7 @@ function GoalEvaluationModal({ goal, employee, isManager, onClose, onSuccess }) 
           <div>
             <h2>Оценка выполнения цели</h2>
             <p className="modal-subtitle">
-              {employee.full_name || employee.username} — {goal.title}
+              {employeeInfo.name ? `${employeeInfo.name} — ` : ''}{goal.title}
             </p>
           </div>
           <button type="button" className="icon-btn" onClick={onClose}>

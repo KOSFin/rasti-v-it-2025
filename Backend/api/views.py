@@ -578,13 +578,18 @@ class GoalEvaluationNotificationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            count = GoalEvaluationNotification.objects.filter(
+            unread_qs = GoalEvaluationNotification.objects.filter(
                 recipient=employee,
                 is_completed=False
-            ).count()
-            return Response({'count': count})
+            )
+            count = unread_qs.count()
+            serializer = self.get_serializer(unread_qs[:10], many=True)
+            return Response({
+                'results': serializer.data,
+                'unread_count': count
+            })
         except Employee.DoesNotExist:
-            return Response({'count': 0})
+            return Response({'results': [], 'unread_count': 0})
     
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

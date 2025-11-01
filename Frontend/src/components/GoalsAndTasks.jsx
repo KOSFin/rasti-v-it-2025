@@ -1200,15 +1200,15 @@ function GoalsAndTasks() {
           goal={evaluationModal.goal}
           isManager={evaluationModal.isManager}
           onClose={() => setEvaluationModal(null)}
-          onSubmit={handleEvaluationSubmit}
+          onSuccess={handleEvaluationSubmit}
         />
       )}
-      
+
       {selfAssessmentModal && (
         <SelfAssessmentModal
           goal={selfAssessmentModal.goal}
           onClose={() => setSelfAssessmentModal(null)}
-          onSubmit={handleSelfAssessmentSubmit}
+          onSuccess={handleSelfAssessmentSubmit}
         />
       )}
     </div>
