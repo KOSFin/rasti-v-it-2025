@@ -189,6 +189,9 @@ def login(request):
         'employee': employee_data
     })
 
+from django.db import IntegrityError
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
@@ -198,7 +201,12 @@ def logout(request):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                token.blacklist()
+                # Обертаємо в трай-кетч, щоб уникнути помилки дублювання
+                try:
+                    token.blacklist()
+                except IntegrityError:
+                    # Токен вже заблокований, продовжуємо
+                    pass
             except (AttributeError, TokenError):
                 # Если blacklist недоступен или токен некорректен, просто продолжаем
                 pass
