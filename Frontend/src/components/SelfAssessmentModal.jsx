@@ -71,12 +71,23 @@ const SelfAssessmentModal = ({ goal, saving = false, error = '', onSubmit, onClo
 
 					{completedTasks.length > 0 && (
 						<div className="self-assessment-tasks">
-							<h3>Выполненные задачи</h3>
-							<ul>
+							<h3>Выполненные задачи ({completedTasks.length})</h3>
+							<div className="tasks-list-modal">
 								{completedTasks.map((task) => (
-									<li key={task.id}>{task.title}</li>
+									<div key={task.id} className="task-item-modal completed">
+										<div className="task-checkbox-modal">
+											<svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+												<circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="2" fill="var(--color-success)" opacity="0.2"/>
+												<path d="M5 9L8 12L13 6" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+											</svg>
+										</div>
+										<div className="task-content-modal">
+											<strong>{task.title}</strong>
+											{task.description && <span>{task.description}</span>}
+										</div>
+									</div>
 								))}
-							</ul>
+							</div>
 						</div>
 					)}
 

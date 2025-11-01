@@ -137,10 +137,32 @@ function Feedback360() {
     setEvaluationError('');
 
     try {
+      // Определяем employee для оценки - это владелец цели (первый участник с is_owner=true)
+      const goal = activeEvaluation.goal;
+      let employeeId = goal.employee;
+      
+      // Если employee не установлен напрямую, ищем владельца среди участников
+      if (!employeeId && goal.participants_info && goal.participants_info.length > 0) {
+        const owner = goal.participants_info.find(p => p.is_owner);
+        employeeId = owner ? owner.employee : goal.participants_info[0].employee;
+      }
+      
+      // Если все еще не нашли, берем из goal_participants
+      if (!employeeId && goal.goal_participants && goal.goal_participants.length > 0) {
+        const owner = goal.goal_participants.find(p => p.is_owner);
+        employeeId = owner ? owner.employee : goal.goal_participants[0].employee;
+      }
+
+      if (!employeeId) {
+        setEvaluationError('Не удалось определить владельца цели для оценки.');
+        setSavingEvaluation(false);
+        return;
+      }
+
       await createFeedback360({
         ...values,
-        employee: activeEvaluation.goal.employee,
-        goal: activeEvaluation.goal.id,
+        employee: employeeId,
+        goal: goal.id,
       });
       setActiveEvaluation(null);
       await loadData();
@@ -149,6 +171,7 @@ function Feedback360() {
       const errorMessage =
         err.response?.data?.error ||
         err.response?.data?.detail ||
+        err.response?.data?.employee?.[0] ||
         'Не удалось отправить оценку. Попробуйте позже.';
       setEvaluationError(errorMessage);
     } finally {

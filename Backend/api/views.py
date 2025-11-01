@@ -664,7 +664,10 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = self.request.user
-        employee = Employee.objects.get(user=user)
+        try:
+            employee = Employee.objects.get(user=user)
+        except Employee.DoesNotExist:
+            raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
         
         # Расчет баллов по логике из Excel
         data = serializer.validated_data
@@ -672,10 +675,20 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         collaboration_score = min(data['collaboration_quality'] // 4, 3)  # 0-10 -> 0-3
         
         total_score = results_score + collaboration_score
+        
+        # Убеждаемся, что employee указан в данных
+        evaluated_employee = data.get('employee')
+        goal = data.get('goal')
+        
+        if not evaluated_employee:
+            raise ValidationError({'employee': 'Необходимо указать оцениваемого сотрудника.'})
+        
+        if not goal:
+            raise ValidationError({'goal': 'Необходимо указать цель.'})
+        
         serializer.save(assessor=employee, calculated_score=total_score)
         
         # Отметить уведомление как выполненное
-        goal = data['goal']
         try:
             notification = GoalEvaluationNotification.objects.get(
                 recipient=employee,
