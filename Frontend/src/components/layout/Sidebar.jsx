@@ -135,8 +135,7 @@ const Sidebar = () => {
 
   const navItems = [
     { path: '/dashboard', icon: FiHome, label: 'Обзор' },
-    { path: '/goals', icon: FiTarget, label: 'Цели' },
-    { path: '/tasks', icon: FiCheckSquare, label: 'Задачи' },
+    { path: '/goals', icon: FiTarget, label: 'Цели и задачи' },
     { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
     { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
     { path: '/nine-box', icon: FiGrid, label: 'Nine Box' },

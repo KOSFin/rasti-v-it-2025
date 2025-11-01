@@ -50,5 +50,3 @@ networks:
   app-network:
     driver: bridge
 
-volumes:
-  postgres_data:
