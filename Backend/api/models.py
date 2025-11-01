@@ -123,6 +123,14 @@ class Task(models.Model):
     )
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return self.title
+
+
 class GoalParticipant(models.Model):
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='goal_participants')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='goal_participants')
@@ -131,16 +139,10 @@ class GoalParticipant(models.Model):
 
     class Meta:
         unique_together = ['goal', 'employee']
+        ordering = ['joined_at']
 
     def __str__(self):
         return f"{self.goal.title} ↔ {self.employee.user.get_full_name()}"
-
-    
-    class Meta:
-        ordering = ['order', 'created_at']
-    
-    def __str__(self):
-        return self.title
 
 class SelfAssessment(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)

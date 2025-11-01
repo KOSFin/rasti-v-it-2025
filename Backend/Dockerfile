@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем код приложения
 COPY . .
 
+# Проверяем, что миграции синхронизированы с моделями
+RUN python manage.py makemigrations --check --dry-run
+
 # Создаем директорию для статических файлов
 RUN mkdir -p /app/staticfiles
 

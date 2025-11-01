@@ -24,7 +24,7 @@ fi
 echo "Creating superuser..."
 python manage.py shell << END
 from django.contrib.auth import get_user_model
-from api.models import Employee, Department
+from api.models import Employee, Department, DepartmentPosition
 
 User = get_user_model()
 admin_user, created = User.objects.get_or_create(
@@ -48,11 +48,19 @@ default_dept, _ = Department.objects.get_or_create(
     defaults={'description': 'Отдел администрирования системы'}
 )
 
+default_position, _ = DepartmentPosition.objects.get_or_create(
+    department=default_dept,
+    title='Администратор',
+    defaults={'importance': 0}
+)
+
 Employee.objects.update_or_create(
     user=admin_user,
     defaults={
         'department': default_dept,
-        'position': 'Администратор',
+        'position': default_position,
+        'position_title': default_position.title,
+        'role': Employee.Role.ADMIN,
         'is_manager': True,
         'hire_date': '2025-01-01'
     }
