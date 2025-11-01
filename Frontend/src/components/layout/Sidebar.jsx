@@ -138,12 +138,12 @@ const Sidebar = () => {
     { path: '/goals', icon: FiTarget, label: 'Цели и задачи' },
     { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
     { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
-    { path: '/nine-box', icon: FiGrid, label: 'Nine Box' },
   ];
 
   if (isManager || user?.is_superuser) {
     navItems.splice(1, 0, { path: '/team', icon: FiUsers, label: 'Команда' });
     navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });
+    navItems.push({ path: '/nine-box', icon: FiGrid, label: 'Nine Box' });
   }
 
   if (user?.is_superuser) {

@@ -2,13 +2,15 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   FiPlus, FiSearch, FiFilter, FiTrash2, FiCalendar, FiExternalLink, 
-  FiUsers, FiChevronDown, FiChevronRight, FiCheckCircle, FiCircle, FiEdit2
+  FiUsers, FiChevronDown, FiChevronRight, FiCheckCircle, FiCircle, FiEdit2, FiStar
 } from 'react-icons/fi';
 import { 
   getGoals, createGoal, updateGoal, deleteGoal, completeGoal,
   createTask, updateTask, deleteTask, getEmployees 
 } from '../api/services';
 import { useAuth } from '../contexts/AuthContext';
+import GoalEvaluationModal from './GoalEvaluationModal';
+import SelfAssessmentModal from './SelfAssessmentModal';
 import './Common.css';
 import './GoalsAndTasks.css';
 
@@ -96,6 +98,10 @@ function GoalsAndTasks() {
   const [completeModalData, setCompleteModalData] = useState(null);
   const [pendingTaskIds, setPendingTaskIds] = useState([]);
   const pendingTimersRef = useRef({});
+  
+  // Модальные окна оценки
+  const [evaluationModal, setEvaluationModal] = useState(null); // { goal, employee }
+  const [selfAssessmentModal, setSelfAssessmentModal] = useState(null); // goal
 
   const isManager = Boolean(employee?.is_manager);
   const isAdmin = Boolean(user?.is_superuser);
@@ -231,6 +237,31 @@ function GoalsAndTasks() {
       return matchesType && matchesEmployee && matchesSearch;
     });
   }, [goals, filterType, searchTerm, assigneeFilter]);
+  
+  // Разделение целей на активные и завершённые
+  const activeGoals = useMemo(() => filteredGoals.filter((g) => !g.is_completed), [filteredGoals]);
+  const completedGoals = useMemo(() => filteredGoals.filter((g) => g.is_completed), [filteredGoals]);
+  
+  // Дальнейшее разделение завершённых целей
+  const completedFullyEvaluated = useMemo(
+    () => completedGoals.filter((g) => {
+      if (!g.evaluation_launched) return true; // Цели без оценки считаются завершёнными
+      const received = g.evaluations_received || 0;
+      const expected = g.evaluations_expected || 0;
+      return expected > 0 && received >= expected;
+    }),
+    [completedGoals]
+  );
+  
+  const completedAwaitingEvaluation = useMemo(
+    () => completedGoals.filter((g) => {
+      if (!g.evaluation_launched) return false;
+      const received = g.evaluations_received || 0;
+      const expected = g.evaluations_expected || 0;
+      return expected > 0 && received < expected;
+    }),
+    [completedGoals]
+  );
 
   const pendingTaskSet = useMemo(() => new Set(pendingTaskIds), [pendingTaskIds]);
 
@@ -449,12 +480,36 @@ function GoalsAndTasks() {
       });
       setCompleteModalData(null);
       setCompletingGoal(null);
+      
+      // Открываем самооценку после завершения цели
+      const completedGoal = goals.find(g => g.id === completeModalData.goalId);
+      if (completedGoal) {
+        setSelfAssessmentModal({ goal: completedGoal });
+      }
+      
       await loadData();
     } catch (err) {
       console.error('Не удалось завершить цель', err);
       const message = err.response?.data?.error || 'Не удалось завершить цель.';
       setError(message);
     }
+  };
+  
+  const handleEvaluateGoal = (goal) => {
+    setEvaluationModal({
+      goal,
+      isManager: isManager || isAdmin,
+    });
+  };
+  
+  const handleEvaluationSubmit = async () => {
+    setEvaluationModal(null);
+    await loadData(); // Обновляем данные после оценки
+  };
+  
+  const handleSelfAssessmentSubmit = async () => {
+    setSelfAssessmentModal(null);
+    await loadData(); // Обновляем данные после самооценки
   };
 
   const goalTypeLabel = (type) => {
@@ -641,19 +696,25 @@ function GoalsAndTasks() {
         </section>
       )}
 
-      <section className="page-section">
-        {loading ? (
-          <div className="panel placeholder">Загружаем цели…</div>
-        ) : filteredGoals.length === 0 ? (
-          <div className="panel empty">
-            <p>Целей по заданным условиям не найдено.</p>
-            <button type="button" className="btn ghost" onClick={() => setShowGoalForm(true)}>
-              Создать новую цель
-            </button>
-          </div>
-        ) : (
-          <div className="goals-list">
-            {filteredGoals.map((goal) => {
+      {loading ? (
+        <div className="panel placeholder">Загружаем цели…</div>
+      ) : (activeGoals.length === 0 && completedGoals.length === 0) ? (
+        <div className="panel empty">
+          <p>Целей по заданным условиям не найдено.</p>
+          <button type="button" className="btn ghost" onClick={() => setShowGoalForm(true)}>
+            Создать новую цель
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Активные цели */}
+          {activeGoals.length > 0 && (
+            <section className="page-section">
+              <h2 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>
+                Активные цели ({activeGoals.length})
+              </h2>
+              <div className="goals-list">
+                {activeGoals.map((goal) => {
               const tasks = goal.tasks || [];
               const completedCount = tasks.filter((task) => task.is_completed).length;
               const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
@@ -847,8 +908,245 @@ function GoalsAndTasks() {
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
+          )}
+          
+          {/* Цели, ожидающие оценки */}
+          {completedAwaitingEvaluation.length > 0 && (
+            <section className="page-section">
+              <h2 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>
+                Ожидают оценки ({completedAwaitingEvaluation.length})
+              </h2>
+              <div className="goals-list">
+                {completedAwaitingEvaluation.map((goal) => {
+                  const tasks = goal.tasks || [];
+                  const completedCount = tasks.filter((task) => task.is_completed).length;
+                  const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
+                  const completedTasksTail = tasks.filter(
+                    (task) => task.is_completed && !pendingTaskSet.has(task.id)
+                  );
+                  const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
+                  
+                  const daysUntil = getDaysUntilDeadline(goal.end_date);
+                  const isUrgent = daysUntil !== null && daysUntil < 7;
+                  const isExpanded = expandedGoals.has(goal.id);
+                  
+                  const evaluationsReceived = goal.evaluations_received || 0;
+                  const evaluationsExpected = goal.evaluations_expected || 0;
+
+                  return (
+                    <article key={goal.id} className="goal-item completed">
+                      <header className="goal-header">
+                        <button
+                          type="button"
+                          className="expand-btn"
+                          onClick={() => toggleGoalExpand(goal.id)}
+                        >
+                          {isExpanded ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
+                        </button>
+                        <div className="goal-info">
+                          <h3>{goal.title}</h3>
+                          <div className="goal-meta">
+                            <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
+                            {canAssign && goal.employee_name && (
+                              <span className="meta-text">{goal.employee_name}</span>
+                            )}
+                            <span className="meta-text">
+                              Оценок: {evaluationsReceived}/{evaluationsExpected}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="goal-dates">
+                          <div className="date-item">
+                            <FiCalendar size={14} />
+                            <span>{formatDateRU(goal.start_date)}</span>
+                          </div>
+                          <div className={`date-item ${isUrgent ? 'urgent' : ''}`}>
+                            <FiCalendar size={14} />
+                            <span>{formatDateRU(goal.end_date)}</span>
+                          </div>
+                        </div>
+                        <div className="goal-progress">
+                          <span>{completedCount}/{tasks.length}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn primary small"
+                          onClick={() => handleEvaluateGoal(goal)}
+                        >
+                          <FiStar size={14} /> Оценить
+                        </button>
+                      </header>
+
+                      {isExpanded && (
+                        <div className="goal-content">
+                          <div className="goal-description">
+                            <h4>Описание</h4>
+                            <p>{goal.description}</p>
+                          </div>
+                          
+                          <div className="goal-description">
+                            <h4>Ожидаемый результат</h4>
+                            <p>{goal.expected_results}</p>
+                          </div>
+
+                          <div className="tasks-section">
+                            <div className="tasks-header">
+                              <h4>Задачи ({tasks.length})</h4>
+                            </div>
+
+                            <ul className="tasks-list">
+                              {allTasksOrdered.length === 0 && (
+                                <li className="empty-tasks">Задач нет.</li>
+                              )}
+                              {allTasksOrdered.map((task) => {
+                                const isPendingCompletion = pendingTaskSet.has(task.id);
+                                const taskClasses = [
+                                  'task-item',
+                                  task.is_completed ? 'completed' : '',
+                                  isPendingCompletion ? 'pending' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ');
+                                return (
+                                  <li key={task.id} className={taskClasses}>
+                                    <button type="button" className="task-checkbox" disabled>
+                                      {task.is_completed ? (
+                                        <FiCheckCircle size={18} />
+                                      ) : (
+                                        <FiCircle size={18} />
+                                      )}
+                                    </button>
+                                    <div className="task-content">
+                                      <strong>{task.title}</strong>
+                                      <span>{task.description}</span>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+          
+          {/* Полностью завершённые цели */}
+          {completedFullyEvaluated.length > 0 && (
+            <section className="page-section">
+              <h2 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>
+                Завершённые цели ({completedFullyEvaluated.length})
+              </h2>
+              <div className="goals-list">
+                {completedFullyEvaluated.map((goal) => {
+                  const tasks = goal.tasks || [];
+                  const completedCount = tasks.filter((task) => task.is_completed).length;
+                  const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
+                  const completedTasksTail = tasks.filter(
+                    (task) => task.is_completed && !pendingTaskSet.has(task.id)
+                  );
+                  const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
+                  
+                  const daysUntil = getDaysUntilDeadline(goal.end_date);
+                  const isUrgent = daysUntil !== null && daysUntil < 7;
+                  const isExpanded = expandedGoals.has(goal.id);
+
+                  return (
+                    <article key={goal.id} className="goal-item completed">
+                      <header className="goal-header">
+                        <button
+                          type="button"
+                          className="expand-btn"
+                          onClick={() => toggleGoalExpand(goal.id)}
+                        >
+                          {isExpanded ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
+                        </button>
+                        <div className="goal-info">
+                          <h3>{goal.title}</h3>
+                          <div className="goal-meta">
+                            <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
+                            {canAssign && goal.employee_name && (
+                              <span className="meta-text">{goal.employee_name}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="goal-dates">
+                          <div className="date-item">
+                            <FiCalendar size={14} />
+                            <span>{formatDateRU(goal.start_date)}</span>
+                          </div>
+                          <div className={`date-item ${isUrgent ? 'urgent' : ''}`}>
+                            <FiCalendar size={14} />
+                            <span>{formatDateRU(goal.end_date)}</span>
+                          </div>
+                        </div>
+                        <div className="goal-progress">
+                          <span>{completedCount}/{tasks.length}</span>
+                        </div>
+                      </header>
+
+                      {isExpanded && (
+                        <div className="goal-content">
+                          <div className="goal-description">
+                            <h4>Описание</h4>
+                            <p>{goal.description}</p>
+                          </div>
+                          
+                          <div className="goal-description">
+                            <h4>Ожидаемый результат</h4>
+                            <p>{goal.expected_results}</p>
+                          </div>
+
+                          <div className="tasks-section">
+                            <div className="tasks-header">
+                              <h4>Задачи ({tasks.length})</h4>
+                            </div>
+
+                            <ul className="tasks-list">
+                              {allTasksOrdered.length === 0 && (
+                                <li className="empty-tasks">Задач нет.</li>
+                              )}
+                              {allTasksOrdered.map((task) => {
+                                const isPendingCompletion = pendingTaskSet.has(task.id);
+                                const taskClasses = [
+                                  'task-item',
+                                  task.is_completed ? 'completed' : '',
+                                  isPendingCompletion ? 'pending' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ');
+                                return (
+                                  <li key={task.id} className={taskClasses}>
+                                    <button type="button" className="task-checkbox" disabled>
+                                      {task.is_completed ? (
+                                        <FiCheckCircle size={18} />
+                                      ) : (
+                                        <FiCircle size={18} />
+                                      )}
+                                    </button>
+                                    <div className="task-content">
+                                      <strong>{task.title}</strong>
+                                      <span>{task.description}</span>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
+      )}
 
       {completeModalData && (
         <div className="modal-overlay" onClick={() => setCompleteModalData(null)}>
@@ -895,6 +1193,23 @@ function GoalsAndTasks() {
             </footer>
           </div>
         </div>
+      )}
+      
+      {evaluationModal && (
+        <GoalEvaluationModal
+          goal={evaluationModal.goal}
+          isManager={evaluationModal.isManager}
+          onClose={() => setEvaluationModal(null)}
+          onSubmit={handleEvaluationSubmit}
+        />
+      )}
+      
+      {selfAssessmentModal && (
+        <SelfAssessmentModal
+          goal={selfAssessmentModal.goal}
+          onClose={() => setSelfAssessmentModal(null)}
+          onSubmit={handleSelfAssessmentSubmit}
+        />
       )}
     </div>
   );

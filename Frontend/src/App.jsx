@@ -133,7 +133,7 @@ function App() {
             <Route
               path="/nine-box"
               element={
-                <PrivateRoute>
+                <PrivateRoute requireManager>
                   <NineBox />
                 </PrivateRoute>
               }
