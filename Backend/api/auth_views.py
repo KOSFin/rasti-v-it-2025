@@ -168,25 +168,33 @@ def login(request):
     
     refresh = RefreshToken.for_user(user)
     
+    employee_data = None
     try:
         employee = Employee.objects.get(user=user)
         employee_data = EmployeeSerializer(employee).data
-        employer = sync_employer_from_employee(employee)
-        pending_review = None
-        if employer:
-            log = ensure_initial_self_review(employer)
-            if log and log.status != log.STATUS_COMPLETED:
-                pending_review = {
-                    'token': str(log.token),
-                    'expires_at': log.expires_at.isoformat(),
-                    'context': log.context,
-                    'employer_id': employer.id,
-                }
-            employee_data['employer_id'] = employer.id
-        if pending_review:
-            employee_data['pending_self_review'] = pending_review
+        
+        try:
+            employer = sync_employer_from_employee(employee)
+            pending_review = None
+            if employer:
+                log = ensure_initial_self_review(employer)
+                if log and log.status != log.STATUS_COMPLETED:
+                    pending_review = {
+                        'token': str(log.token),
+                        'expires_at': log.expires_at.isoformat(),
+                        'context': log.context,
+                        'employer_id': employer.id,
+                    }
+                employee_data['employer_id'] = employer.id
+            if pending_review:
+                employee_data['pending_self_review'] = pending_review
+        except Exception:
+            # Логируем ошибку, но не прерываем процесс входа
+            # Это может происходить если, например, у пользователя нет email
+            pass
     except Employee.DoesNotExist:
-        employee_data = None
+        # Пользователь может войти без связанного профиля сотрудника
+        pass
     
     return Response({
         'refresh': str(refresh),
@@ -229,25 +237,33 @@ def logout(request):
 @permission_classes([IsAuthenticated])
 def current_user(request):
     """Получение текущего пользователя"""
+    employee_data = None
     try:
         employee = Employee.objects.get(user=request.user)
         employee_data = EmployeeSerializer(employee).data
-        employer = sync_employer_from_employee(employee)
-        pending_review = None
-        if employer:
-            log = ensure_initial_self_review(employer)
-            if log and log.status != log.STATUS_COMPLETED:
-                pending_review = {
-                    'token': str(log.token),
-                    'expires_at': log.expires_at.isoformat(),
-                    'context': log.context,
-                    'employer_id': employer.id,
-                }
-            employee_data['employer_id'] = employer.id
-        if pending_review:
-            employee_data['pending_self_review'] = pending_review
+        
+        try:
+            employer = sync_employer_from_employee(employee)
+            pending_review = None
+            if employer:
+                log = ensure_initial_self_review(employer)
+                if log and log.status != log.STATUS_COMPLETED:
+                    pending_review = {
+                        'token': str(log.token),
+                        'expires_at': log.expires_at.isoformat(),
+                        'context': log.context,
+                        'employer_id': employer.id,
+                    }
+                employee_data['employer_id'] = employer.id
+            if pending_review:
+                employee_data['pending_self_review'] = pending_review
+        except Exception:
+            # Логируем ошибку, но не прерываем процесс получения данных
+            # Это может происходить если, например, у пользователя нет email
+            pass
     except Employee.DoesNotExist:
-        employee_data = None
+        # Пользователь может существовать без связанного профиля сотрудника
+        pass
     
     return Response({
         'user': UserSerializer(request.user).data,
