@@ -9,6 +9,11 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.settings import api_settings
+try:
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+except ModuleNotFoundError:  # blacklist app can be disabled in settings
+    BlacklistedToken = None
 
 from .models import Department, DepartmentPosition, Employee
 from .serializers import (
@@ -201,12 +206,20 @@ def logout(request):
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
-                # Обертаємо в трай-кетч, щоб уникнути помилки дублювання
-                try:
-                    token.blacklist()
-                except IntegrityError:
-                    # Токен вже заблокований, продовжуємо
-                    pass
+                jti = token.payload.get(api_settings.JTI_CLAIM)
+                # Проверяем существование перед блэклистингом, чтобы не шуметь в логах
+                if BlacklistedToken and jti:
+                    already_blacklisted = BlacklistedToken.objects.filter(token__jti=jti).exists()
+                else:
+                    already_blacklisted = False
+
+                # Оборачиваем в try/catch, чтобы выдержать гонки и отсутствующий blacklist
+                if not already_blacklisted:
+                    try:
+                        token.blacklist()
+                    except IntegrityError:
+                        # Токен уже заблокирован параллельно — это допустимо
+                        pass
             except (AttributeError, TokenError):
                 # Если blacklist недоступен или токен некорректен, просто продолжаем
                 pass
