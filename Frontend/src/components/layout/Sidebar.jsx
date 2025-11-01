@@ -25,7 +25,11 @@ const Sidebar = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const isManager = employee?.is_manager;
+  const role = employee?.role || (user?.is_superuser ? 'admin' : null);
+  const isAdmin = role === 'admin' || user?.is_superuser;
+  const isManager = role === 'manager';
+  const isBusinessPartner = role === 'business_partner';
+  const canSeeNineBox = isAdmin || isManager || isBusinessPartner;
 
   const fetchSidebarData = async () => {
     if (!employee) {
@@ -60,7 +64,7 @@ const Sidebar = () => {
 
   useEffect(() => {
     fetchSidebarData();
-  }, [isManager]);
+  }, [role]);
 
   const goalById = useMemo(() => {
     return goals.reduce((acc, goal) => {
@@ -138,15 +142,15 @@ const Sidebar = () => {
     { path: '/goals', icon: FiTarget, label: 'Цели и задачи' },
     { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
     { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
-    { path: '/nine-box', icon: FiGrid, label: 'Nine Box' },
+    ...(canSeeNineBox ? [{ path: '/nine-box', icon: FiGrid, label: 'Nine Box' }] : []),
   ];
 
-  if (isManager || user?.is_superuser) {
+  if (isManager || isAdmin) {
     navItems.splice(1, 0, { path: '/team', icon: FiUsers, label: 'Команда' });
     navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });
   }
 
-  if (user?.is_superuser) {
+  if (isAdmin) {
     navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
     navItems.splice(2, 0, { path: '/admin/departments', icon: FiLayers, label: 'Отделы' });
   }

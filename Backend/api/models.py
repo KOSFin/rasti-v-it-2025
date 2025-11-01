@@ -1,6 +1,19 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+
+class DepartmentPosition(models.Model):
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='positions')
+    title = models.CharField(max_length=200)
+    importance = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['importance', 'id']
+        unique_together = ['department', 'title']
+
+    def __str__(self):
+        return f"{self.department.name} • {self.title}"
+
 class Department(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -9,14 +22,50 @@ class Department(models.Model):
         return self.name
 
 class Employee(models.Model):
+    class Role(models.TextChoices):
+        ADMIN = 'admin', 'Суперпользователь'
+        MANAGER = 'manager', 'Менеджер'
+        BUSINESS_PARTNER = 'business_partner', 'Бизнес-партнер'
+        EMPLOYEE = 'employee', 'Сотрудник'
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
-    position = models.CharField(max_length=200)
+    position_title = models.CharField(max_length=200, blank=True)
+    position = models.ForeignKey(
+        DepartmentPosition,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employees'
+    )
+    role = models.CharField(
+        max_length=32,
+        choices=Role.choices,
+        default=Role.EMPLOYEE
+    )
     is_manager = models.BooleanField(default=False)
     hire_date = models.DateField()
     
     def __str__(self):
-        return f"{self.user.get_full_name()} - {self.position}"
+        position_label = self.position.title if self.position else self.position_title or '—'
+        return f"{self.user.get_full_name()} - {position_label}"
+
+    def save(self, *args, **kwargs):
+        # Поддерживаем совместимость старого флага менеджера с новой системой ролей
+        if self.is_manager and self.role != self.Role.MANAGER:
+            self.role = self.Role.MANAGER
+
+        if self.user and self.user.is_superuser and self.role != self.Role.ADMIN:
+            self.role = self.Role.ADMIN
+
+        if self.role == self.Role.MANAGER:
+            self.is_manager = True
+        else:
+            self.is_manager = False
+
+        if self.position and not self.position_title:
+            self.position_title = self.position.title
+        super().save(*args, **kwargs)
 
 class Goal(models.Model):
     GOAL_TYPES = [
@@ -30,7 +79,7 @@ class Goal(models.Model):
         ('manager', 'Руководитель'),
     ]
     
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='goals')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='legacy_goals')
     created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='created_goals')
     creator_type = models.CharField(max_length=20, choices=CREATOR_TYPES, default='self')
     title = models.CharField(max_length=300)
@@ -46,12 +95,18 @@ class Goal(models.Model):
     evaluation_launched = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    participants = models.ManyToManyField(
+        Employee,
+        through='GoalParticipant',
+        related_name='goals'
+    )
     
     class Meta:
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.title} - {self.employee.user.get_full_name()}"
+        owner_name = self.employee.user.get_full_name() if self.employee_id else 'группа'
+        return f"{self.title} - {owner_name}"
 
 class Task(models.Model):
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='tasks')
@@ -59,8 +114,27 @@ class Task(models.Model):
     description = models.TextField()
     is_completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks_completed'
+    )
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+class GoalParticipant(models.Model):
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='goal_participants')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='goal_participants')
+    is_owner = models.BooleanField(default=False)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['goal', 'employee']
+
+    def __str__(self):
+        return f"{self.goal.title} ↔ {self.employee.user.get_full_name()}"
+
     
     class Meta:
         ordering = ['order', 'created_at']

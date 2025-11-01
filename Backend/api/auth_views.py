@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Department, Employee
+from .models import Department, DepartmentPosition, Employee
 from .serializers import (
     AdminEmployeeCreateSerializer,
     EmployeeDetailSerializer,
@@ -51,13 +51,6 @@ def register(request):
         )
         
         # Создаем профиль сотрудника
-        employee_data = {
-            'department': request.data.get('department'),
-            'position': request.data.get('position', 'Сотрудник'),
-            'is_manager': request.data.get('is_manager', False),
-            'hire_date': request.data.get('hire_date'),
-        }
-        
         department_id = request.data.get('department')
         department = None
         if department_id:
@@ -90,11 +83,28 @@ def register(request):
                 return value.strip().lower() in ['1', 'true', 'yes', 'on']
             return bool(value)
 
+        position_id = request.data.get('position')
+        position = None
+        if position_id:
+            try:
+                position = DepartmentPosition.objects.get(pk=position_id)
+            except DepartmentPosition.DoesNotExist:
+                return Response(
+                    {'error': 'Указанной должности не существует.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        role_value = request.data.get('role', Employee.Role.EMPLOYEE)
+        if role_value not in Employee.Role.values:
+            role_value = Employee.Role.EMPLOYEE
+
         employee = Employee.objects.create(
             user=user,
             department=department,
-            position=request.data.get('position', 'Сотрудник'),
-            is_manager=to_bool(request.data.get('is_manager'), False),
+            position=position,
+            position_title=position.title if position else request.data.get('position_title', 'Сотрудник'),
+            role=role_value,
+            is_manager=to_bool(request.data.get('is_manager'), False) or role_value == Employee.Role.MANAGER,
             hire_date=hire_date,
         )
 
