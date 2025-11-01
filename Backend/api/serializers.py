@@ -127,8 +127,9 @@ class GoalSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
     tasks_completed = serializers.SerializerMethodField()
     tasks_total = serializers.SerializerMethodField()
-    evaluations_received = serializers.SerializerMethodField()
-    evaluations_expected = serializers.SerializerMethodField()
+    evaluations_total = serializers.SerializerMethodField()
+    evaluations_completed = serializers.SerializerMethodField()
+    evaluations_pending = serializers.SerializerMethodField()
 
     class Meta:
         model = Goal
@@ -143,22 +144,15 @@ class GoalSerializer(serializers.ModelSerializer):
     
     def get_tasks_total(self, obj):
         return obj.tasks.count()
-    
-    def get_evaluations_received(self, obj):
-        """Количество полученных оценок (завершённых фидбэков)"""
-        from .models import Feedback360
-        return Feedback360.objects.filter(goal=obj).count()
-    
-    def get_evaluations_expected(self, obj):
-        """Ожидаемое количество оценок (коллег из отдела)"""
-        if not obj.evaluation_launched:
-            return 0
-        from .models import Employee
-        department = obj.employee.department
-        if not department:
-            return 0
-        # Количество коллег из отдела (исключая самого сотрудника)
-        return Employee.objects.filter(department=department).exclude(id=obj.employee.id).count()
+
+    def get_evaluations_total(self, obj):
+        return obj.evaluation_notifications.count()
+
+    def get_evaluations_completed(self, obj):
+        return obj.evaluation_notifications.filter(is_completed=True).count()
+
+    def get_evaluations_pending(self, obj):
+        return obj.evaluation_notifications.filter(is_completed=False).count()
 
 
 
@@ -205,10 +199,29 @@ class GoalEvaluationNotificationSerializer(serializers.ModelSerializer):
     goal_title = serializers.CharField(source='goal.title', read_only=True)
     goal_employee_name = serializers.CharField(source='goal.employee.user.get_full_name', read_only=True)
     department_name = serializers.CharField(source='goal.employee.department.name', read_only=True)
+    title = serializers.SerializerMethodField()
+    message = serializers.SerializerMethodField()
+    link = serializers.SerializerMethodField()
+    context = serializers.SerializerMethodField()
     
     class Meta:
         model = GoalEvaluationNotification
         fields = '__all__'
+
+    def get_title(self, obj):
+        return f'Оценка цели "{obj.goal.title}"'
+
+    def get_message(self, obj):
+        base = f'Нужно оценить выполнение цели "{obj.goal.title}" для {obj.goal.employee.user.get_full_name()}.'
+        if obj.goal.employee.department and obj.goal.employee.department.name:
+            return f"{base} Отдел: {obj.goal.employee.department.name}."
+        return base
+
+    def get_link(self, obj):
+        return f"/feedback-360?goal={obj.goal_id}"
+
+    def get_context(self, obj):
+        return 'goal_evaluation'
 
 class PotentialAssessmentSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)

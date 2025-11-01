@@ -544,52 +544,19 @@ class GoalEvaluationNotificationViewSet(viewsets.ModelViewSet):
         except Employee.DoesNotExist:
             return GoalEvaluationNotification.objects.none()
     
-    def list(self, request, *args, **kwargs):
-        """Переопределяем list для возврата уведомлений с подсчётом непрочитанных"""
-        queryset = self.filter_queryset(self.get_queryset())
-        
-        # Пагинация
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        
-        serializer = self.get_serializer(queryset, many=True)
-        
-        # Подсчёт непрочитанных (не завершённых)
-        user = self.request.user
-        try:
-            employee = Employee.objects.get(user=user)
-            unread_count = GoalEvaluationNotification.objects.filter(
-                recipient=employee,
-                is_completed=False
-            ).count()
-        except Employee.DoesNotExist:
-            unread_count = 0
-        
-        return Response({
-            'results': serializer.data,
-            'unread_count': unread_count
-        })
-    
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
         """Получить количество непрочитанных уведомлений"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            unread_qs = GoalEvaluationNotification.objects.filter(
+            count = GoalEvaluationNotification.objects.filter(
                 recipient=employee,
                 is_completed=False
-            )
-            count = unread_qs.count()
-            serializer = self.get_serializer(unread_qs[:10], many=True)
-            return Response({
-                'results': serializer.data,
-                'unread_count': count
-            })
+            ).count()
+            return Response({'count': count})
         except Employee.DoesNotExist:
-            return Response({'results': [], 'unread_count': 0})
+            return Response({'count': 0})
     
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
