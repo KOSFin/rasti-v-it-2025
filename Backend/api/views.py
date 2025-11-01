@@ -113,10 +113,17 @@ class GoalViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = self.request.user
-        current_employee = Employee.objects.get(user=user)
+        current_employee = Employee.objects.filter(user=user).first()
+        if not current_employee and not user.is_superuser:
+            raise ValidationError({'employee': 'Профиль сотрудника не найден. Обратитесь к администратору.'})
         target_employee = None
         creator_type = 'self'
-        requires_evaluation = self.request.data.get('requires_evaluation', False)
+
+        raw_requires = self.request.data.get('requires_evaluation', False)
+        if isinstance(raw_requires, str):
+            requires_evaluation = raw_requires.strip().lower() in {'1', 'true', 'yes', 'on'}
+        else:
+            requires_evaluation = bool(raw_requires)
 
         if user.is_superuser:
             employee_id = self.request.data.get('employee')

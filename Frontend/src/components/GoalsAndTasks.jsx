@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   FiPlus, FiSearch, FiFilter, FiTrash2, FiCalendar, FiExternalLink, 
@@ -94,13 +94,62 @@ function GoalsAndTasks() {
   
   const [completingGoal, setCompletingGoal] = useState(null);
   const [completeModalData, setCompleteModalData] = useState(null);
+  const [pendingTaskIds, setPendingTaskIds] = useState([]);
+  const pendingTimersRef = useRef({});
 
   const isManager = Boolean(employee?.is_manager);
   const isAdmin = Boolean(user?.is_superuser);
   const canAssign = isAdmin || isManager;
 
-  const loadData = async () => {
-    setLoading(true);
+  const updateGoalTaskState = (goalId, taskId, updater) => {
+    setGoals((prevGoals) =>
+      prevGoals.map((goalItem) => {
+        if (goalItem.id !== goalId) {
+          return goalItem;
+        }
+
+        const originalTasks = goalItem.tasks || [];
+        const updatedTasks = originalTasks.map((taskItem) => {
+          if (taskItem.id !== taskId) {
+            return taskItem;
+          }
+
+          const patch = typeof updater === 'function' ? updater(taskItem) : updater;
+          return { ...taskItem, ...patch };
+        });
+
+        const tasksCompleted = updatedTasks.filter((item) => item.is_completed).length;
+
+        return {
+          ...goalItem,
+          tasks: updatedTasks,
+          tasks_completed: tasksCompleted,
+          tasks_total: updatedTasks.length,
+        };
+      })
+    );
+  };
+
+  const addPendingTask = (taskId) => {
+    setPendingTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+  };
+
+  const removePendingTask = (taskId) => {
+    setPendingTaskIds((prev) => prev.filter((id) => id !== taskId));
+  };
+
+  const clearPendingTimer = (taskId) => {
+    const storedTimer = pendingTimersRef.current[taskId];
+    if (storedTimer) {
+      clearTimeout(storedTimer);
+      delete pendingTimersRef.current[taskId];
+    }
+  };
+
+  const loadData = async ({ showLoader = true } = {}) => {
+    if (showLoader) {
+      setLoading(true);
+    }
     setError('');
 
     try {
@@ -110,7 +159,9 @@ function GoalsAndTasks() {
       console.error('Не удалось загрузить цели', err);
       setError('Не удалось загрузить цели. Попробуйте обновить страницу.');
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   };
 
@@ -148,6 +199,27 @@ function GoalsAndTasks() {
     }
   }, [canAssign, searchParams]);
 
+  useEffect(() => () => {
+    Object.values(pendingTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+    pendingTimersRef.current = {};
+  }, []);
+
+  useEffect(() => {
+    if (pendingTaskIds.length === 0) {
+      return;
+    }
+
+    const existingIds = new Set();
+    goals.forEach((goalItem) => {
+      (goalItem.tasks || []).forEach((taskItem) => existingIds.add(taskItem.id));
+    });
+
+    const hasMissing = pendingTaskIds.some((taskId) => !existingIds.has(taskId));
+    if (hasMissing) {
+      setPendingTaskIds((prev) => prev.filter((taskId) => existingIds.has(taskId)));
+    }
+  }, [goals, pendingTaskIds]);
+
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
       const matchesType = filterType === 'all' || goal.goal_type === filterType;
@@ -158,6 +230,8 @@ function GoalsAndTasks() {
       return matchesType && matchesEmployee && matchesSearch;
     });
   }, [goals, filterType, searchTerm, assigneeFilter]);
+
+  const pendingTaskSet = useMemo(() => new Set(pendingTaskIds), [pendingTaskIds]);
 
   const handleGoalFormChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -233,25 +307,57 @@ function GoalsAndTasks() {
   };
 
   const handleTaskToggle = async (goal, task) => {
+    const nextStatus = !task.is_completed;
+    const wasPending = pendingTaskIds.includes(task.id);
+
+    clearPendingTimer(task.id);
+
+    updateGoalTaskState(goal.id, task.id, { is_completed: nextStatus });
+
+    if (nextStatus) {
+      addPendingTask(task.id);
+    } else {
+      removePendingTask(task.id);
+    }
+
     try {
       await updateTask(task.id, {
         goal: goal.id,
         title: task.title,
         description: task.description,
-        is_completed: !task.is_completed,
+        is_completed: nextStatus,
       });
-      
-      // Если задача отмечена как выполненная, ждем 3 секунды
-      if (!task.is_completed) {
-        setTimeout(async () => {
-          await loadData();
+
+      if (nextStatus) {
+        const timerId = setTimeout(() => {
+          removePendingTask(task.id);
+          delete pendingTimersRef.current[task.id];
+          loadData({ showLoader: false });
         }, 3000);
+        pendingTimersRef.current[task.id] = timerId;
       } else {
-        await loadData();
+        await loadData({ showLoader: false });
       }
     } catch (err) {
       console.error('Не удалось обновить задачу', err);
       setError('Обновление задачи не удалось.');
+
+      updateGoalTaskState(goal.id, task.id, { is_completed: !nextStatus });
+
+      if (nextStatus) {
+        removePendingTask(task.id);
+        delete pendingTimersRef.current[task.id];
+      } else if (wasPending) {
+        addPendingTask(task.id);
+        const timerId = setTimeout(() => {
+          removePendingTask(task.id);
+          delete pendingTimersRef.current[task.id];
+          loadData({ showLoader: false });
+        }, 3000);
+        pendingTimersRef.current[task.id] = timerId;
+      }
+
+      await loadData({ showLoader: false });
     }
   };
 
@@ -548,9 +654,12 @@ function GoalsAndTasks() {
           <div className="goals-list">
             {filteredGoals.map((goal) => {
               const tasks = goal.tasks || [];
-              const completedTasks = tasks.filter(t => t.is_completed);
-              const incompleteTasks = tasks.filter(t => !t.is_completed);
-              const allTasksOrdered = [...incompleteTasks, ...completedTasks];
+              const completedCount = tasks.filter((task) => task.is_completed).length;
+              const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
+              const completedTasksTail = tasks.filter(
+                (task) => task.is_completed && !pendingTaskSet.has(task.id)
+              );
+              const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
               
               const daysUntil = getDaysUntilDeadline(goal.end_date);
               const isUrgent = daysUntil !== null && daysUntil < 7;
@@ -597,7 +706,7 @@ function GoalsAndTasks() {
                       </div>
                     </div>
                     <div className="goal-progress">
-                      <span>{completedTasks.length}/{tasks.length}</span>
+                      <span>{completedCount}/{tasks.length}</span>
                     </div>
                     <button type="button" className="icon-btn" onClick={() => handleDeleteGoal(goal.id)}>
                       <FiTrash2 size={16} />
@@ -671,8 +780,17 @@ function GoalsAndTasks() {
                           {allTasksOrdered.length === 0 && (
                             <li className="empty-tasks">Задач пока нет. Добавьте первую задачу.</li>
                           )}
-                          {allTasksOrdered.map((task) => (
-                            <li key={task.id} className={`task-item ${task.is_completed ? 'completed' : ''}`}>
+                          {allTasksOrdered.map((task) => {
+                            const isPendingCompletion = pendingTaskSet.has(task.id);
+                            const taskClasses = [
+                              'task-item',
+                              task.is_completed ? 'completed' : '',
+                              isPendingCompletion ? 'pending' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ');
+                            return (
+                              <li key={task.id} className={taskClasses}>
                               <button
                                 type="button"
                                 className="task-checkbox"
@@ -707,8 +825,9 @@ function GoalsAndTasks() {
                                   </button>
                                 </div>
                               )}
-                            </li>
-                          ))}
+                              </li>
+                            );
+                          })}
                         </ul>
 
                         {canComplete && (
