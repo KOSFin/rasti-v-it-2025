@@ -163,8 +163,8 @@ class ReviewLog(TimeStampedModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=["context", "status"], name="performance_reviewlog_context_status_idx"),
-            models.Index(fields=["token"], name="performance_reviewlog_token_idx"),
+            models.Index(fields=["context", "status"], name="perf_rvlog_ctx_stat_idx"),
+            models.Index(fields=["token"], name="perf_rvlog_token_idx"),
         ]
 
     def mark_expired(self) -> None:
@@ -188,8 +188,8 @@ class ReviewAnswer(TimeStampedModel):
     class Meta:
         unique_together = ("employer", "respondent", "period", "question")
         indexes = [
-            models.Index(fields=["employer", "period"], name="performance_answer_employer_period_idx"),
-            models.Index(fields=["respondent", "period"], name="performance_answer_respondent_period_idx"),
+            models.Index(fields=["employer", "period"], name="perf_ans_emp_period_idx"),
+            models.Index(fields=["respondent", "period"], name="perf_ans_resp_period_idx"),
         ]
 
     @property
@@ -305,8 +305,8 @@ class TaskReviewAnswer(TimeStampedModel):
     class Meta:
         unique_together = ("task", "employer", "respondent", "question")
         indexes = [
-            models.Index(fields=["task", "respondent"], name="performance_task_answer_task_resp_idx"),
-            models.Index(fields=["task", "employer"], name="performance_task_answer_task_employer_idx"),
+            models.Index(fields=["task", "respondent"], name="perf_tans_task_resp_idx"),
+            models.Index(fields=["task", "employer"], name="perf_tans_task_emp_idx"),
         ]
 
 
@@ -318,7 +318,7 @@ class TeamRelation(TimeStampedModel):
 
     class Meta:
         unique_together = ("employer", "peer")
-        indexes = [models.Index(fields=["employer"], name="performance_team_relation_employer_idx")]
+        indexes = [models.Index(fields=["employer"], name="perf_team_rel_emp_idx")]
 
 
 class SiteNotification(TimeStampedModel):
@@ -350,8 +350,8 @@ class SiteNotification(TimeStampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["recipient", "is_read"], name="performance_notification_recipient_idx"),
-            models.Index(fields=["context"], name="performance_notification_context_idx"),
+            models.Index(fields=["recipient", "is_read"], name="perf_notif_recip_idx"),
+            models.Index(fields=["context"], name="perf_notif_ctx_idx"),
         ]
 
     def mark_read(self) -> None:
