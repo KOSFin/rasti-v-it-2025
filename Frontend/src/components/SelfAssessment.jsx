@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiAward, FiTrendingUp } from 'react-icons/fi';
-import { getTasks, getSelfAssessments, createSelfAssessment } from '../api/services';
-import { useAuth } from '../contexts/AuthContext';
+import { getSelfAssessments, getPendingSelfAssessments } from '../api/services';
 import './Common.css';
 
 const extractResults = (response) => {
@@ -14,37 +12,23 @@ const extractResults = (response) => {
   return Array.isArray(response.data) ? response.data : response.data?.results || [];
 };
 
-const DEFAULT_FORM = {
-  task: '',
-  achieved_results: '',
-  personal_contribution: '',
-  skills_acquired: '',
-  improvements_needed: '',
-  collaboration_quality: 5,
-  satisfaction_score: 5,
-};
-
 function SelfAssessment() {
-  const { employee } = useAuth();
-  const [tasks, setTasks] = useState([]);
+  const [pendingGoals, setPendingGoals] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState(DEFAULT_FORM);
-  const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const [tasksRes, assessmentsRes] = await Promise.all([
-        getTasks({ page_size: 200 }),
+      const [pendingRes, assessmentsRes] = await Promise.all([
+        getPendingSelfAssessments(),
         getSelfAssessments({ page_size: 200, ordering: '-created_at' }),
       ]);
 
-      setTasks(extractResults(tasksRes));
+      setPendingGoals(extractResults(pendingRes));
       setAssessments(extractResults(assessmentsRes));
     } catch (err) {
       console.error('Не удалось загрузить данные самооценки', err);
@@ -59,90 +43,30 @@ function SelfAssessment() {
   }, []);
 
   const metrics = useMemo(() => {
-    if (!assessments.length) {
-      return {
-        count: 0,
-        average: '0.0',
-        lastDate: '—',
-        withoutAssessment: tasks.length,
-      };
-    }
-
-    const averageScore = (
-      assessments.reduce((sum, item) => sum + (item.calculated_score || 0), 0) / assessments.length
-    ).toFixed(1);
-    const last = assessments[0]?.created_at
-      ? new Date(assessments[0].created_at).toLocaleDateString('ru-RU')
-      : '—';
-
-    const tasksWithAssessment = new Set(assessments.map((item) => item.task));
-
     return {
       count: assessments.length,
-      average: averageScore,
-      lastDate: last,
-      withoutAssessment: tasks.filter((task) => !tasksWithAssessment.has(task.id)).length,
+      average: assessments.length
+        ? (
+            assessments.reduce((sum, item) => sum + (item.calculated_score || 0), 0) /
+            assessments.length
+          ).toFixed(1)
+        : '0.0',
+      lastDate: assessments[0]?.created_at
+        ? new Date(assessments[0].created_at).toLocaleDateString('ru-RU')
+        : '—',
+      awaiting: pendingGoals.length,
     };
-  }, [assessments, tasks]);
-
-  const handleChange = (event) => {
-    const { name, value, type } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'number' ? Number(value) : value,
-    }));
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!formData.task) {
-      setError('Выберите задачу для самооценки.');
-      return;
-    }
-
-    if (!employee?.id) {
-      setError('Профиль сотрудника не загружен. Обновите страницу и попробуйте снова.');
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      // Добавляем employee ID из контекста - обязательное поле для API
-      const payload = {
-        ...formData,
-        employee: employee.id,
-        task: Number(formData.task),
-      };
-      
-      await createSelfAssessment(payload);
-      setFormData(DEFAULT_FORM);
-      setShowForm(false);
-      await loadData();
-    } catch (err) {
-      console.error('Не удалось создать самооценку', err);
-      const errorMessage = err.response?.data?.employee?.[0] 
-        || err.response?.data?.error 
-        || err.response?.data?.detail 
-        || 'Не удалось сохранить самооценку. Попробуйте ещё раз.';
-      setError(errorMessage);
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [assessments, pendingGoals]);
 
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <h1>Самооценка</h1>
-          <p className="page-subtitle">Отслеживайте личный прогресс и фиксируйте выводы по задачам</p>
-        </div>
-        <div className="page-actions">
-          <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
-            <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Добавить самооценку'}
-          </button>
+          <p className="page-subtitle">
+            Самооценка запускается автоматически после завершения цели с обязательной оценкой.
+            Заполните форму в модальном окне, которое откроется сразу после завершения.
+          </p>
         </div>
       </header>
 
@@ -165,111 +89,38 @@ function SelfAssessment() {
           <p className="insight-meta">Дата последнего ввода</p>
         </article>
         <article className="insight-card">
-          <h3>Без самооценки</h3>
-          <p className="insight-number warning">{metrics.withoutAssessment}</p>
-          <p className="insight-meta">Задач ждут анализа</p>
+          <h3>Ожидают заполнения</h3>
+          <p className="insight-number warning">{metrics.awaiting}</p>
+          <p className="insight-meta">Завершённые цели без самооценки</p>
         </article>
       </section>
 
-      {showForm && (
-        <section className="panel">
+      <section className="page-section">
+        <article className="panel">
           <header className="panel-header">
-            <h2>Новая самооценка</h2>
-            <span>Зафиксируйте результат и развитие по выбранной задаче</span>
+            <h2>Завершённые цели без самооценки</h2>
+            <span>{pendingGoals.length}</span>
           </header>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <label className="form-field">
-              <span>Задача *</span>
-              <select name="task" value={formData.task} onChange={handleChange} required>
-                <option value="">Выберите задачу</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field span-2">
-              <span>Достигнутые результаты *</span>
-              <textarea
-                name="achieved_results"
-                value={formData.achieved_results}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Опишите ключевые результаты"
-                required
-              />
-            </label>
-            <label className="form-field span-2">
-              <span>Личный вклад *</span>
-              <textarea
-                name="personal_contribution"
-                value={formData.personal_contribution}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Какой вклад внесли лично вы?"
-                required
-              />
-            </label>
-            <label className="form-field span-2">
-              <span>Приобретённые навыки *</span>
-              <textarea
-                name="skills_acquired"
-                value={formData.skills_acquired}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Какие навыки появились или усилились?"
-                required
-              />
-            </label>
-            <label className="form-field span-2">
-              <span>Зоны роста *</span>
-              <textarea
-                name="improvements_needed"
-                value={formData.improvements_needed}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Что стоит улучшить в дальнейшем?"
-                required
-              />
-            </label>
-            <label className="form-field">
-              <span>Сотрудничество *</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                name="collaboration_quality"
-                value={formData.collaboration_quality}
-                onChange={handleChange}
-                required
-              />
-              <small>Оцените командное взаимодействие (0-10)</small>
-            </label>
-            <label className="form-field">
-              <span>Удовлетворённость *</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                name="satisfaction_score"
-                value={formData.satisfaction_score}
-                onChange={handleChange}
-                required
-              />
-              <small>Насколько вы довольны результатом? (0-10)</small>
-            </label>
-            <div className="form-actions">
-              <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>
-                Отменить
-              </button>
-              <button type="submit" className="btn primary" disabled={saving}>
-                {saving ? 'Сохраняем…' : 'Сохранить самооценку'}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
+          {loading ? (
+            <div className="panel placeholder">Загружаем список…</div>
+          ) : pendingGoals.length === 0 ? (
+            <p className="empty">Все цели с обязательной оценкой уже заполнены.</p>
+          ) : (
+            <ul className="list detailed">
+              {pendingGoals.map((goal) => (
+                <li key={goal.id}>
+                  <div>
+                    <strong>{goal.title}</strong>
+                    <span>Завершена {new Date(goal.completed_at).toLocaleDateString('ru-RU')}</span>
+                    <span className="tag muted">Создал {goal.creator_type === 'manager' ? 'руководитель' : 'сотрудник'}</span>
+                  </div>
+                  <span className="tag muted">Оценка откроется автоматически</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      </section>
 
       <section className="page-section">
         {loading ? (
@@ -278,14 +129,14 @@ function SelfAssessment() {
           <div className="cards-grid history-grid">
             {assessments.length === 0 ? (
               <div className="panel empty">
-                <p>Самооценок пока нет. Добавьте первую запись.</p>
+                <p>Самооценок пока нет. Они появятся после завершения первых целей.</p>
               </div>
             ) : (
               assessments.map((assessment) => (
                 <article key={assessment.id} className="card assessment-card">
                   <header className="card-header">
                     <div>
-                      <h3>{assessment.task_title}</h3>
+                      <h3>{assessment.goal_title}</h3>
                       <span className="card-meta">{new Date(assessment.created_at).toLocaleDateString('ru-RU')}</span>
                     </div>
                     <span className="score">{assessment.calculated_score}</span>

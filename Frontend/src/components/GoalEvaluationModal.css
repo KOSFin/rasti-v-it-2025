@@ -1,5 +1,131 @@
 /* GoalEvaluationModal.css */
 
+.goal-evaluation-modal {
+  max-width: 640px;
+}
+
+.goal-evaluation-modal .modal-subtitle {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.goal-evaluation-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.goal-evaluation-intro p {
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.goal-evaluation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.goal-evaluation-tasks {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.goal-evaluation-tasks h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.goal-evaluation-tasks ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.goal-evaluation-ratings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.goal-evaluation-ratings label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.goal-evaluation-ratings select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.goal-evaluation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.goal-evaluation-field span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.goal-evaluation-field textarea {
+  resize: vertical;
+  min-height: 96px;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.goal-evaluation-field textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+}
+
+.goal-evaluation-error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: rgba(244, 67, 54, 0.14);
+  border: 1px solid rgba(244, 67, 54, 0.35);
+  color: var(--color-error);
+  font-size: 0.9rem;
+}
+
+.goal-evaluation-modal .modal-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--card-bg);
+}
+/* GoalEvaluationModal.css */
+
 .evaluation-modal {
   max-width: 700px;
   max-height: 90vh;

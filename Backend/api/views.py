@@ -194,20 +194,6 @@ class GoalViewSet(viewsets.ModelViewSet):
         
         # Если нужно запустить оценку
         if launch_evaluation:
-            # Создаем самооценку для сотрудника
-            SelfAssessment.objects.get_or_create(
-                employee=goal.employee,
-                goal=goal,
-                defaults={
-                    'achieved_results': '',
-                    'personal_contribution': '',
-                    'skills_acquired': '',
-                    'improvements_needed': '',
-                    'collaboration_quality': 0,
-                    'satisfaction_score': 0,
-                }
-            )
-            
             # Создаем уведомления для коллег из того же отдела
             colleagues = Employee.objects.filter(
                 department=goal.employee.department
@@ -304,6 +290,19 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         
         total_score = collaboration_score + satisfaction_score
         serializer.save(employee=employee, calculated_score=total_score)
+
+    def perform_update(self, serializer):
+        data = serializer.validated_data
+        instance = serializer.instance
+
+        collaboration_raw = data.get('collaboration_quality', instance.collaboration_quality)
+        satisfaction_raw = data.get('satisfaction_score', instance.satisfaction_score)
+
+        collaboration_score = min(collaboration_raw // 4, 3)
+        satisfaction_score = min(satisfaction_raw // 5, 2)
+
+        total_score = collaboration_score + satisfaction_score
+        serializer.save(calculated_score=total_score)
 
 class Feedback360ViewSet(viewsets.ModelViewSet):
     serializer_class = Feedback360Serializer

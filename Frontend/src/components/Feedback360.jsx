@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiUsers, FiTarget, FiSend, FiCheckCircle } from 'react-icons/fi';
+import { FiUsers, FiTarget, FiSend, FiCheckCircle } from 'react-icons/fi';
 import {
   getPendingFeedback360,
   getFeedback360ForMe,
   getFeedback360List,
   getGoals,
+  getGoal,
   createFeedback360,
 } from '../api/services';
 import './Common.css';
+import GoalEvaluationModal from './GoalEvaluationModal';
 
 const extractResults = (response) => {
   if (!response?.data) {
@@ -19,15 +21,6 @@ const extractResults = (response) => {
   return Array.isArray(response.data) ? response.data : response.data?.results || [];
 };
 
-const DEFAULT_FORM = {
-  employee: '',
-  goal: '',
-  results_achievement: 5,
-  personal_qualities: '',
-  collaboration_quality: 5,
-  improvements_suggested: '',
-};
-
 function Feedback360() {
   const [pendingEvaluations, setPendingEvaluations] = useState([]);
   const [feedbackAboutMe, setFeedbackAboutMe] = useState([]);
@@ -35,9 +28,9 @@ function Feedback360() {
   const [completedGoals, setCompletedGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState(DEFAULT_FORM);
-  const [saving, setSaving] = useState(false);
+  const [activeEvaluation, setActiveEvaluation] = useState(null);
+  const [evaluationError, setEvaluationError] = useState('');
+  const [savingEvaluation, setSavingEvaluation] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -80,47 +73,86 @@ function Feedback360() {
     };
   }, [pendingEvaluations, feedbackAboutMe, feedbackIGave]);
 
-  const handleChange = (event) => {
-    const { name, value, type } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'number' ? Number(value) : value,
-    }));
-  };
+  const goalById = useMemo(() => {
+    return completedGoals.reduce((acc, goal) => {
+      acc[goal.id] = goal;
+      return acc;
+    }, {});
+  }, [completedGoals]);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!formData.employee || !formData.goal) {
-      setError('Выберите сотрудника и цель.');
+  const handleOpenEvaluation = async (notification) => {
+    if (!notification) {
       return;
     }
 
-    setSaving(true);
+    setError('');
+    setEvaluationError('');
+
+    const goalId = notification.goal || notification.goal_id;
+    let goal = goalId ? goalById[goalId] : null;
+
+    if (!goal && notification.goal_details) {
+      goal = notification.goal_details;
+    }
+
+    if ((!goal || !goal.employee) && goalId) {
+      try {
+        const response = await getGoal(goalId);
+        goal = response?.data;
+        if (goal) {
+          setCompletedGoals((prev) => {
+            if (prev.some((item) => item.id === goal.id)) {
+              return prev;
+            }
+            return [...prev, goal];
+          });
+        }
+      } catch (err) {
+        console.error('Не удалось получить данные цели для оценки', err);
+        setError('Не удалось загрузить данные цели. Попробуйте позже.');
+        return;
+      }
+    }
+
+    if (!goal) {
+      setError('Не удалось найти данные цели. Обновите страницу и попробуйте снова.');
+      return;
+    }
+
+    setActiveEvaluation({ goal, notification });
+  };
+
+  const handleCloseEvaluation = () => {
+    setActiveEvaluation(null);
+    setEvaluationError('');
+    setSavingEvaluation(false);
+  };
+
+  const handleSubmitEvaluation = async (values) => {
+    if (!activeEvaluation?.goal) {
+      return;
+    }
+
+    setSavingEvaluation(true);
+    setEvaluationError('');
 
     try {
-      const payload = {
-        ...formData,
-        employee: Number(formData.employee),
-        goal: Number(formData.goal),
-        results_achievement: Number(formData.results_achievement),
-        collaboration_quality: Number(formData.collaboration_quality),
-      };
-      
-      await createFeedback360(payload);
-      setFormData(DEFAULT_FORM);
-      setShowForm(false);
+      await createFeedback360({
+        ...values,
+        employee: activeEvaluation.goal.employee,
+        goal: activeEvaluation.goal.id,
+      });
+      setActiveEvaluation(null);
       await loadData();
     } catch (err) {
       console.error('Не удалось отправить оценку', err);
-      const errorMessage = err.response?.data?.employee?.[0] 
-        || err.response?.data?.goal?.[0]
-        || err.response?.data?.error 
-        || err.response?.data?.detail 
-        || 'Не удалось отправить оценку. Попробуйте позже.';
-      setError(errorMessage);
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.detail ||
+        'Не удалось отправить оценку. Попробуйте позже.';
+      setEvaluationError(errorMessage);
     } finally {
-      setSaving(false);
+      setSavingEvaluation(false);
     }
   };
 
@@ -130,11 +162,6 @@ function Feedback360() {
         <div>
           <h1>Обратная связь 360°</h1>
           <p className="page-subtitle">Получайте и давайте развивающую обратную связь коллегам</p>
-        </div>
-        <div className="page-actions">
-          <button type="button" className="btn primary" onClick={() => setShowForm((prev) => !prev)}>
-            <FiPlus size={16} /> {showForm ? 'Скрыть форму' : 'Новая оценка'}
-          </button>
         </div>
       </header>
 
@@ -158,95 +185,6 @@ function Feedback360() {
         </article>
       </section>
 
-      {showForm && (
-        <section className="panel">
-          <header className="panel-header">
-            <h2>Заполнить оценку</h2>
-            <span>Выберите коллегу и задачу, чтобы оставить обратную связь</span>
-          </header>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <label className="form-field">
-              <span>Коллега *</span>
-              <select name="employee" value={formData.employee} onChange={handleChange} required>
-                <option value="">Выберите коллегу</option>
-                {pendingEvaluations.map((notif) => (
-                  <option key={notif.goal} value={notif.goal_employee_name}>
-                    {notif.goal_employee_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Цель *</span>
-              <select name="goal" value={formData.goal} onChange={handleChange} required>
-                <option value="">Выберите цель</option>
-                {completedGoals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.title} — {goal.employee_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-field">
-              <span>Достижение результатов *</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                name="results_achievement"
-                value={formData.results_achievement}
-                onChange={handleChange}
-                required
-              />
-              <small>Баллы от 0 до 10</small>
-            </label>
-            <label className="form-field">
-              <span>Качество сотрудничества *</span>
-              <input
-                type="number"
-                min={0}
-                max={10}
-                name="collaboration_quality"
-                value={formData.collaboration_quality}
-                onChange={handleChange}
-                required
-              />
-              <small>Баллы от 0 до 10</small>
-            </label>
-            <label className="form-field span-2">
-              <span>Личные качества *</span>
-              <textarea
-                name="personal_qualities"
-                value={formData.personal_qualities}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Опишите сильные стороны и поведение коллеги"
-                required
-              />
-            </label>
-            <label className="form-field span-2">
-              <span>Рекомендации по развитию *</span>
-              <textarea
-                name="improvements_suggested"
-                value={formData.improvements_suggested}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Что поможет коллегe развиваться дальше?"
-                required
-              />
-            </label>
-            <div className="form-actions">
-              <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>
-                Отменить
-              </button>
-              <button type="submit" className="btn primary" disabled={saving}>
-                {saving ? 'Отправляем…' : 'Отправить оценку'}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
       <section className="page-section feedback-layout">
         {loading ? (
           <div className="panel placeholder">Загружаем оценки…</div>
@@ -268,10 +206,11 @@ function Feedback360() {
                       <span>{notif.goal_title}</span>
                       {notif.department_name && <span className="tag muted">{notif.department_name}</span>}
                     </div>
-                    <button type="button" className="btn ghost" onClick={() => {
-                      setFormData((prev) => ({ ...prev, goal: notif.goal, employee: notif.goal?.employee }));
-                      setShowForm(true);
-                    }}>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => handleOpenEvaluation(notif)}
+                    >
                       Оценить
                     </button>
                   </li>
@@ -343,6 +282,17 @@ function Feedback360() {
           </>
         )}
       </section>
+
+      {activeEvaluation?.goal && (
+        <GoalEvaluationModal
+          goal={activeEvaluation.goal}
+          notification={activeEvaluation.notification}
+          saving={savingEvaluation}
+          error={evaluationError}
+          onSubmit={handleSubmitEvaluation}
+          onClose={handleCloseEvaluation}
+        />
+      )}
     </div>
   );
 }

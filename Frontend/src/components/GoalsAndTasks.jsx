@@ -1,16 +1,26 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   FiPlus, FiSearch, FiFilter, FiTrash2, FiCalendar, FiExternalLink, 
   FiUsers, FiChevronDown, FiChevronRight, FiCheckCircle, FiCircle, FiEdit2
 } from 'react-icons/fi';
-import { 
-  getGoals, createGoal, updateGoal, deleteGoal, completeGoal,
-  createTask, updateTask, deleteTask, getEmployees 
+import {
+  getGoals,
+  createGoal,
+  updateGoal,
+  deleteGoal,
+  completeGoal,
+  createTask,
+  updateTask,
+  deleteTask,
+  getEmployees,
+  getPendingSelfAssessments,
+  createSelfAssessment,
 } from '../api/services';
 import { useAuth } from '../contexts/AuthContext';
 import './Common.css';
 import './GoalsAndTasks.css';
+import SelfAssessmentModal from './SelfAssessmentModal';
 
 const extractResults = (response) => {
   if (!response?.data) return [];
@@ -74,28 +84,33 @@ function GoalsAndTasks() {
   const [searchParams] = useSearchParams();
   
   const [goals, setGoals] = useState([]);
+  const [pendingSelfGoals, setPendingSelfGoals] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [goalFormData, setGoalFormData] = useState(initialGoalForm);
   const [goalFormError, setGoalFormError] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
-  
+
   const [expandedGoals, setExpandedGoals] = useState(new Set());
   const [editingTask, setEditingTask] = useState(null);
   const [taskFormData, setTaskFormData] = useState(initialTaskForm);
   const [showTaskForm, setShowTaskForm] = useState(null); // goalId
-  
+
   const [filterType, setFilterType] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
-  
-  const [completingGoal, setCompletingGoal] = useState(null);
+
   const [completeModalData, setCompleteModalData] = useState(null);
   const [pendingTaskIds, setPendingTaskIds] = useState([]);
   const pendingTimersRef = useRef({});
+
+  const [selfAssessmentGoal, setSelfAssessmentGoal] = useState(null);
+  const [selfAssessmentError, setSelfAssessmentError] = useState('');
+  const [selfAssessmentSaving, setSelfAssessmentSaving] = useState(false);
+  const [autoLaunchHandled, setAutoLaunchHandled] = useState(false);
 
   const isManager = Boolean(employee?.is_manager);
   const isAdmin = Boolean(user?.is_superuser);
@@ -153,11 +168,17 @@ function GoalsAndTasks() {
     setError('');
 
     try {
-      const goalsRes = await getGoals({ page_size: 200, ordering: '-created_at' });
+      const [goalsRes, pendingAssessmentsRes] = await Promise.all([
+        getGoals({ page_size: 200, ordering: '-created_at' }),
+        getPendingSelfAssessments(),
+      ]);
+
       setGoals(extractResults(goalsRes));
+      setPendingSelfGoals(extractResults(pendingAssessmentsRes));
     } catch (err) {
       console.error('Не удалось загрузить цели', err);
       setError('Не удалось загрузить цели. Попробуйте обновить страницу.');
+      setPendingSelfGoals([]);
     } finally {
       if (showLoader) {
         setLoading(false);
@@ -221,6 +242,84 @@ function GoalsAndTasks() {
     }
   }, [goals, pendingTaskIds]);
 
+  const resolveGoalForSelfAssessment = useCallback(
+    (goalRef) => {
+      const numericId = Number(
+        typeof goalRef === 'object' && goalRef ? goalRef.id : goalRef
+      );
+
+      if (Number.isNaN(numericId)) {
+        return null;
+      }
+
+      return (
+        goals.find((item) => Number(item.id) === numericId) ||
+        pendingSelfGoals.find((item) => Number(item.id) === numericId) ||
+        null
+      );
+    },
+    [goals, pendingSelfGoals]
+  );
+
+  const openSelfAssessment = useCallback(
+    (goalRef) => {
+      const target =
+        typeof goalRef === 'object' && goalRef
+          ? goalRef
+          : resolveGoalForSelfAssessment(goalRef);
+
+      if (!target) {
+        return;
+      }
+
+      setSelfAssessmentGoal(target);
+      setSelfAssessmentError('');
+      setAutoLaunchHandled(true);
+    },
+    [resolveGoalForSelfAssessment]
+  );
+
+  useEffect(() => {
+    if (pendingSelfGoals.length === 0) {
+      setAutoLaunchHandled(false);
+    }
+  }, [pendingSelfGoals.length]);
+
+  useEffect(() => {
+    if (loading || selfAssessmentGoal) {
+      return;
+    }
+
+    const paramGoalId = searchParams.get('self_assessment_goal');
+    if (paramGoalId) {
+      const target = resolveGoalForSelfAssessment(paramGoalId);
+      if (target) {
+        openSelfAssessment(target);
+        return;
+      }
+    }
+
+    if (!autoLaunchHandled && pendingSelfGoals.length > 0) {
+      const target = resolveGoalForSelfAssessment(pendingSelfGoals[0]);
+      if (target) {
+        openSelfAssessment(target);
+      }
+    }
+  }, [
+    loading,
+    selfAssessmentGoal,
+    searchParams,
+    resolveGoalForSelfAssessment,
+    openSelfAssessment,
+    pendingSelfGoals,
+    autoLaunchHandled,
+  ]);
+
+  const pendingSelfGoalIds = useMemo(
+    () => new Set(pendingSelfGoals.map((goal) => goal.id)),
+    [pendingSelfGoals]
+  );
+
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
       const matchesType = filterType === 'all' || goal.goal_type === filterType;
@@ -233,6 +332,31 @@ function GoalsAndTasks() {
   }, [goals, filterType, searchTerm, assigneeFilter]);
 
   const pendingTaskSet = useMemo(() => new Set(pendingTaskIds), [pendingTaskIds]);
+
+  const categorizedGoals = useMemo(() => {
+    const buckets = {
+      active: [],
+      awaiting: [],
+      completed: [],
+    };
+
+    filteredGoals.forEach((goal) => {
+      const awaitingEvaluation =
+        goal.is_completed &&
+        (goal.evaluation_launched || pendingSelfGoalIds.has(goal.id)) &&
+        ((goal.evaluations_pending ?? 0) > 0 || pendingSelfGoalIds.has(goal.id));
+
+      if (!goal.is_completed) {
+        buckets.active.push(goal);
+      } else if (awaitingEvaluation) {
+        buckets.awaiting.push(goal);
+      } else {
+        buckets.completed.push(goal);
+      }
+    });
+
+    return buckets;
+  }, [filteredGoals, pendingSelfGoalIds]);
 
   const handleGoalFormChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -429,7 +553,6 @@ function GoalsAndTasks() {
   };
 
   const handleCompleteGoalClick = (goal) => {
-    setCompletingGoal(goal.id);
     setCompleteModalData({
       goalId: goal.id,
       title: goal.title,
@@ -444,17 +567,300 @@ function GoalsAndTasks() {
     if (!completeModalData) return;
 
     try {
-      await completeGoal(completeModalData.goalId, {
+      const response = await completeGoal(completeModalData.goalId, {
         launch_evaluation: completeModalData.launchEvaluation,
       });
+      const updatedGoal = response?.data;
+
       setCompleteModalData(null);
-      setCompletingGoal(null);
-      await loadData();
+
+      if (
+        updatedGoal &&
+        updatedGoal.evaluation_launched &&
+        Number(updatedGoal.employee) === Number(employee?.id)
+      ) {
+        openSelfAssessment(updatedGoal);
+      }
+
+      await loadData({ showLoader: false });
     } catch (err) {
       console.error('Не удалось завершить цель', err);
       const message = err.response?.data?.error || 'Не удалось завершить цель.';
       setError(message);
     }
+  };
+
+  const handleSelfAssessmentSubmit = async (formValues) => {
+    if (!selfAssessmentGoal) {
+      return;
+    }
+
+    setSelfAssessmentSaving(true);
+    setSelfAssessmentError('');
+
+    try {
+      await createSelfAssessment({
+        ...formValues,
+        goal: selfAssessmentGoal.id,
+        collaboration_quality: Number(formValues.collaboration_quality ?? 0),
+        satisfaction_score: Number(formValues.satisfaction_score ?? 0),
+      });
+
+      setSelfAssessmentGoal(null);
+      setAutoLaunchHandled(false);
+      await loadData({ showLoader: false });
+    } catch (err) {
+      console.error('Не удалось сохранить самооценку', err);
+      const message =
+        err.response?.data?.achieved_results?.[0] ||
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        'Не удалось сохранить самооценку. Попробуйте снова.';
+      setSelfAssessmentError(message);
+    } finally {
+      setSelfAssessmentSaving(false);
+    }
+  };
+
+  const handleCloseSelfAssessment = () => {
+    setSelfAssessmentGoal(null);
+    setSelfAssessmentError('');
+  };
+
+  const renderSection = (title, items, emptyMessage) => (
+    <div className="category-section" key={title}>
+      <div className="category-header">
+        <h2>{title}</h2>
+        <span>{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="category-empty">{emptyMessage}</div>
+      ) : (
+        <div className="goals-list">{items.map((item) => renderGoalCard(item))}</div>
+      )}
+    </div>
+  );
+
+  const renderGoalCard = (goal) => {
+    const tasks = goal.tasks || [];
+    const completedCount = tasks.filter((task) => task.is_completed).length;
+    const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
+    const completedTasksTail = tasks.filter((task) => task.is_completed && !pendingTaskSet.has(task.id));
+    const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
+
+    const daysUntil = getDaysUntilDeadline(goal.end_date);
+    const isUrgent = daysUntil !== null && daysUntil < 7;
+    const isExpanded = expandedGoals.has(goal.id);
+    const canComplete = checkCanCompleteGoal(goal);
+    const isOwner = Number(goal.employee) === Number(employee?.id);
+    const awaitingEvaluation =
+      goal.is_completed &&
+      (goal.evaluation_launched || pendingSelfGoalIds.has(goal.id)) &&
+      ((goal.evaluations_pending ?? 0) > 0 || pendingSelfGoalIds.has(goal.id));
+    const needsSelfAssessment = isOwner && pendingSelfGoalIds.has(goal.id);
+
+    const goalClasses = ['goal-item'];
+    if (goal.is_completed) {
+      goalClasses.push('completed');
+    }
+    if (awaitingEvaluation) {
+      goalClasses.push('awaiting');
+    }
+
+    const evaluationMeta = awaitingEvaluation
+      ? needsSelfAssessment
+        ? 'Самооценка ожидает'
+        : `Коллег ждут: ${goal.evaluations_pending ?? 0}`
+      : null;
+
+    return (
+      <article key={goal.id} className={goalClasses.join(' ')}>
+        <header className="goal-header">
+          <button
+            type="button"
+            className="expand-btn"
+            onClick={() => toggleGoalExpand(goal.id)}
+          >
+            {isExpanded ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
+          </button>
+          <div className="goal-info">
+            <h3>{goal.title}</h3>
+            <div className="goal-meta">
+              <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
+              {canAssign && goal.employee_name && (
+                <span className="meta-text">{goal.employee_name}</span>
+              )}
+              <span className="meta-text">
+                Создал: {goal.creator_type === 'manager' ? 'Руководитель' : 'Сотрудник'}
+              </span>
+              <span className={`meta-text ${goal.requires_evaluation ? 'highlight' : ''}`}>
+                Обязательная оценка: {goal.requires_evaluation ? 'Да' : 'Нет'}
+              </span>
+              {evaluationMeta && <span className="meta-text highlight">{evaluationMeta}</span>}
+            </div>
+          </div>
+          <div className="goal-dates">
+            <div className="date-item">
+              <FiCalendar size={14} />
+              <span>{formatDateRU(goal.start_date)}</span>
+            </div>
+            <div className={`date-item ${isUrgent ? 'urgent' : ''}`}>
+              <FiCalendar size={14} />
+              <span>
+                {formatDateRU(goal.end_date)}
+                {isUrgent && daysUntil >= 0 && ` (${daysUntil} дн.)`}
+                {daysUntil < 0 && ' (просрочено)'}
+              </span>
+            </div>
+          </div>
+          <div className="goal-progress">
+            <span>{completedCount}/{tasks.length}</span>
+          </div>
+          <button type="button" className="icon-btn" onClick={() => handleDeleteGoal(goal.id)}>
+            <FiTrash2 size={16} />
+          </button>
+        </header>
+
+        {isExpanded && (
+          <div className="goal-content">
+            <div className="goal-description">
+              <h4>Описание</h4>
+              <p>{goal.description}</p>
+            </div>
+
+            <div className="goal-description">
+              <h4>Ожидаемый результат</h4>
+              <p>{goal.expected_results}</p>
+            </div>
+
+            {goal.task_link && (
+              <div className="goal-link">
+                <a href={goal.task_link} target="_blank" rel="noopener noreferrer">
+                  <FiExternalLink size={14} /> Материалы
+                </a>
+              </div>
+            )}
+
+            {needsSelfAssessment && (
+              <div className="self-assessment-callout">
+                <p>По этой цели нужно заполнить самооценку. Это займёт пару минут.</p>
+                <button
+                  type="button"
+                  className="btn primary small"
+                  onClick={() => openSelfAssessment(goal)}
+                >
+                  Заполнить
+                </button>
+              </div>
+            )}
+
+            <div className="tasks-section">
+              <div className="tasks-header">
+                <h4>Задачи ({tasks.length})</h4>
+                {!goal.is_completed && (
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => handleAddTask(goal.id)}
+                  >
+                    <FiPlus size={14} /> Добавить задачу
+                  </button>
+                )}
+              </div>
+
+              {showTaskForm === goal.id && (
+                <form className="task-form" onSubmit={(e) => handleTaskSubmit(e, goal.id)}>
+                  <input
+                    type="text"
+                    name="title"
+                    value={taskFormData.title}
+                    onChange={handleTaskFormChange}
+                    placeholder="Название задачи"
+                    required
+                  />
+                  <textarea
+                    name="description"
+                    value={taskFormData.description}
+                    onChange={handleTaskFormChange}
+                    placeholder="Описание задачи"
+                    rows={2}
+                    required
+                  />
+                  <div className="task-form-actions">
+                    <button type="button" className="btn ghost small" onClick={() => setShowTaskForm(null)}>
+                      Отмена
+                    </button>
+                    <button type="submit" className="btn primary small">
+                      {editingTask ? 'Сохранить' : 'Добавить'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <ul className="tasks-list">
+                {allTasksOrdered.length === 0 && (
+                  <li className="empty-tasks">Задач пока нет. Добавьте первую задачу.</li>
+                )}
+                {allTasksOrdered.map((task) => {
+                  const isPendingCompletion = pendingTaskSet.has(task.id);
+                  const taskClasses = [
+                    'task-item',
+                    task.is_completed ? 'completed' : '',
+                    isPendingCompletion ? 'pending' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+                  return (
+                    <li key={task.id} className={taskClasses}>
+                      <button
+                        type="button"
+                        className="task-checkbox"
+                        onClick={() => handleTaskToggle(goal, task)}
+                        disabled={goal.is_completed}
+                      >
+                        {task.is_completed ? <FiCheckCircle size={18} /> : <FiCircle size={18} />}
+                      </button>
+                      <div className="task-content">
+                        <strong>{task.title}</strong>
+                        <span>{task.description}</span>
+                      </div>
+                      {!goal.is_completed && (
+                        <div className="task-actions">
+                          <button
+                            type="button"
+                            className="icon-btn small"
+                            onClick={() => handleEditTask(goal, task)}
+                          >
+                            <FiEdit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn small"
+                            onClick={() => handleDeleteTask(task.id)}
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {canComplete && (
+                <button
+                  type="button"
+                  className="btn success"
+                  onClick={() => handleCompleteGoalClick(goal)}
+                >
+                  Завершить цель
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </article>
+    );
   };
 
   const goalTypeLabel = (type) => {
@@ -543,6 +949,7 @@ function GoalsAndTasks() {
                 </select>
               </label>
             )}
+
             <label className="form-field">
               <span>Название *</span>
               <input
@@ -554,6 +961,7 @@ function GoalsAndTasks() {
                 required
               />
             </label>
+
             <label className="form-field span-2">
               <span>Описание *</span>
               <textarea
@@ -565,6 +973,7 @@ function GoalsAndTasks() {
                 required
               />
             </label>
+
             <label className="form-field">
               <span>Тип цели *</span>
               <select name="goal_type" value={goalFormData.goal_type} onChange={handleGoalFormChange} required>
@@ -573,6 +982,7 @@ function GoalsAndTasks() {
                 <option value="personal">Личное развитие</option>
               </select>
             </label>
+
             <label className="form-field">
               <span>Дата начала *</span>
               <input
@@ -583,6 +993,7 @@ function GoalsAndTasks() {
                 required
               />
             </label>
+
             <label className="form-field">
               <span>Дата завершения *</span>
               <input
@@ -593,6 +1004,7 @@ function GoalsAndTasks() {
                 required
               />
             </label>
+
             <label className="form-field span-2">
               <span>Ожидаемый результат *</span>
               <textarea
@@ -604,6 +1016,7 @@ function GoalsAndTasks() {
                 required
               />
             </label>
+
             <label className="form-field span-2">
               <span>Сопутствующая ссылка</span>
               <input
@@ -614,7 +1027,7 @@ function GoalsAndTasks() {
                 placeholder="https://..."
               />
             </label>
-            
+
             {canAssign && goalFormData.employee && goalFormData.employee !== String(employee?.id) && (
               <label className="form-field checkbox span-2">
                 <input
@@ -652,201 +1065,11 @@ function GoalsAndTasks() {
             </button>
           </div>
         ) : (
-          <div className="goals-list">
-            {filteredGoals.map((goal) => {
-              const tasks = goal.tasks || [];
-              const completedCount = tasks.filter((task) => task.is_completed).length;
-              const visibleTasks = tasks.filter((task) => !task.is_completed || pendingTaskSet.has(task.id));
-              const completedTasksTail = tasks.filter(
-                (task) => task.is_completed && !pendingTaskSet.has(task.id)
-              );
-              const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
-              
-              const daysUntil = getDaysUntilDeadline(goal.end_date);
-              const isUrgent = daysUntil !== null && daysUntil < 7;
-              const isExpanded = expandedGoals.has(goal.id);
-              const canComplete = checkCanCompleteGoal(goal);
-
-              return (
-                <article key={goal.id} className={`goal-item ${goal.is_completed ? 'completed' : ''}`}>
-                  <header className="goal-header">
-                    <button
-                      type="button"
-                      className="expand-btn"
-                      onClick={() => toggleGoalExpand(goal.id)}
-                    >
-                      {isExpanded ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
-                    </button>
-                    <div className="goal-info">
-                      <h3>{goal.title}</h3>
-                      <div className="goal-meta">
-                        <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
-                        {canAssign && goal.employee_name && (
-                          <span className="meta-text">{goal.employee_name}</span>
-                        )}
-                        <span className="meta-text">
-                          Создал: {goal.creator_type === 'manager' ? 'Руководитель' : 'Сотрудник'}
-                        </span>
-                        <span className={`meta-text ${goal.requires_evaluation ? 'highlight' : ''}`}>
-                          Обязательная оценка: {goal.requires_evaluation ? 'Да' : 'Нет'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="goal-dates">
-                      <div className="date-item">
-                        <FiCalendar size={14} />
-                        <span>{formatDateRU(goal.start_date)}</span>
-                      </div>
-                      <div className={`date-item ${isUrgent ? 'urgent' : ''}`}>
-                        <FiCalendar size={14} />
-                        <span>
-                          {formatDateRU(goal.end_date)}
-                          {isUrgent && daysUntil >= 0 && ` (${daysUntil} дн.)`}
-                          {daysUntil < 0 && ' (просрочено)'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="goal-progress">
-                      <span>{completedCount}/{tasks.length}</span>
-                    </div>
-                    <button type="button" className="icon-btn" onClick={() => handleDeleteGoal(goal.id)}>
-                      <FiTrash2 size={16} />
-                    </button>
-                  </header>
-
-                  {isExpanded && (
-                    <div className="goal-content">
-                      <div className="goal-description">
-                        <h4>Описание</h4>
-                        <p>{goal.description}</p>
-                      </div>
-                      
-                      <div className="goal-description">
-                        <h4>Ожидаемый результат</h4>
-                        <p>{goal.expected_results}</p>
-                      </div>
-
-                      {goal.task_link && (
-                        <div className="goal-link">
-                          <a href={goal.task_link} target="_blank" rel="noopener noreferrer">
-                            <FiExternalLink size={14} /> Материалы
-                          </a>
-                        </div>
-                      )}
-
-                      <div className="tasks-section">
-                        <div className="tasks-header">
-                          <h4>Задачи ({tasks.length})</h4>
-                          {!goal.is_completed && (
-                            <button
-                              type="button"
-                              className="btn ghost small"
-                              onClick={() => handleAddTask(goal.id)}
-                            >
-                              <FiPlus size={14} /> Добавить задачу
-                            </button>
-                          )}
-                        </div>
-
-                        {showTaskForm === goal.id && (
-                          <form className="task-form" onSubmit={(e) => handleTaskSubmit(e, goal.id)}>
-                            <input
-                              type="text"
-                              name="title"
-                              value={taskFormData.title}
-                              onChange={handleTaskFormChange}
-                              placeholder="Название задачи"
-                              required
-                            />
-                            <textarea
-                              name="description"
-                              value={taskFormData.description}
-                              onChange={handleTaskFormChange}
-                              placeholder="Описание задачи"
-                              rows={2}
-                              required
-                            />
-                            <div className="task-form-actions">
-                              <button type="button" className="btn ghost small" onClick={() => setShowTaskForm(null)}>
-                                Отмена
-                              </button>
-                              <button type="submit" className="btn primary small">
-                                {editingTask ? 'Сохранить' : 'Добавить'}
-                              </button>
-                            </div>
-                          </form>
-                        )}
-
-                        <ul className="tasks-list">
-                          {allTasksOrdered.length === 0 && (
-                            <li className="empty-tasks">Задач пока нет. Добавьте первую задачу.</li>
-                          )}
-                          {allTasksOrdered.map((task) => {
-                            const isPendingCompletion = pendingTaskSet.has(task.id);
-                            const taskClasses = [
-                              'task-item',
-                              task.is_completed ? 'completed' : '',
-                              isPendingCompletion ? 'pending' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ');
-                            return (
-                              <li key={task.id} className={taskClasses}>
-                              <button
-                                type="button"
-                                className="task-checkbox"
-                                onClick={() => handleTaskToggle(goal, task)}
-                                disabled={goal.is_completed}
-                              >
-                                {task.is_completed ? (
-                                  <FiCheckCircle size={18} />
-                                ) : (
-                                  <FiCircle size={18} />
-                                )}
-                              </button>
-                              <div className="task-content">
-                                <strong>{task.title}</strong>
-                                <span>{task.description}</span>
-                              </div>
-                              {!goal.is_completed && (
-                                <div className="task-actions">
-                                  <button
-                                    type="button"
-                                    className="icon-btn small"
-                                    onClick={() => handleEditTask(goal, task)}
-                                  >
-                                    <FiEdit2 size={14} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="icon-btn small"
-                                    onClick={() => handleDeleteTask(task.id)}
-                                  >
-                                    <FiTrash2 size={14} />
-                                  </button>
-                                </div>
-                              )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-
-                        {canComplete && (
-                          <button
-                            type="button"
-                            className="btn success"
-                            onClick={() => handleCompleteGoalClick(goal)}
-                          >
-                            Завершить цель
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+          <>
+            {renderSection('Активные цели', categorizedGoals.active, 'Активных целей нет. Создайте новую цель, чтобы начать.')}
+            {renderSection('Ожидают оценки', categorizedGoals.awaiting, 'Сейчас нет целей, ожидающих оценок.')}
+            {renderSection('Завершённые цели', categorizedGoals.completed, 'Завершённые цели появятся здесь после оценки.')}
+          </>
         )}
       </section>
 
@@ -895,6 +1118,16 @@ function GoalsAndTasks() {
             </footer>
           </div>
         </div>
+      )}
+
+      {selfAssessmentGoal && (
+        <SelfAssessmentModal
+          goal={selfAssessmentGoal}
+          saving={selfAssessmentSaving}
+          error={selfAssessmentError}
+          onSubmit={handleSelfAssessmentSubmit}
+          onClose={handleCloseSelfAssessment}
+        />
       )}
     </div>
   );

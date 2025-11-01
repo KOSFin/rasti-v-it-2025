@@ -130,6 +130,9 @@ class GoalSerializer(serializers.ModelSerializer):
     evaluations_total = serializers.SerializerMethodField()
     evaluations_completed = serializers.SerializerMethodField()
     evaluations_pending = serializers.SerializerMethodField()
+    awaits_self_assessment = serializers.SerializerMethodField()
+    awaits_peer_reviews = serializers.SerializerMethodField()
+    self_assessment_submitted = serializers.SerializerMethodField()
 
     class Meta:
         model = Goal
@@ -153,6 +156,19 @@ class GoalSerializer(serializers.ModelSerializer):
 
     def get_evaluations_pending(self, obj):
         return obj.evaluation_notifications.filter(is_completed=False).count()
+
+    def get_self_assessment_submitted(self, obj):
+        return obj.self_assessments.filter(employee=obj.employee).exists()
+
+    def get_awaits_self_assessment(self, obj):
+        if not obj.evaluation_launched:
+            return False
+        return not obj.self_assessments.filter(employee=obj.employee).exists()
+
+    def get_awaits_peer_reviews(self, obj):
+        if not obj.evaluation_launched:
+            return False
+        return obj.evaluation_notifications.filter(is_completed=False).exists()
 
 
 

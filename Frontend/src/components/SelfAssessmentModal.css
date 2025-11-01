@@ -1,0 +1,126 @@
+/* SelfAssessmentModal.css */
+
+.self-assessment-modal {
+	max-width: 660px;
+}
+
+.self-assessment-modal .modal-subtitle {
+	margin-top: 0.5rem;
+	font-size: 0.95rem;
+	color: var(--text-secondary);
+}
+
+.self-assessment-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+	max-height: 75vh;
+	overflow-y: auto;
+}
+
+.self-assessment-intro p {
+	margin: 0 0 0.5rem 0;
+	line-height: 1.5;
+	color: var(--text-primary);
+}
+
+.self-assessment-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.self-assessment-tasks {
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 1rem;
+}
+
+.self-assessment-tasks h3 {
+	margin: 0 0 0.5rem 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.self-assessment-tasks ul {
+	margin: 0;
+	padding-left: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+}
+
+.self-assessment-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.self-assessment-field span {
+	font-size: 0.9rem;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.self-assessment-field textarea {
+	resize: vertical;
+	min-height: 96px;
+	padding: 0.75rem;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	background: var(--bg-secondary);
+	color: var(--text-primary);
+	line-height: 1.5;
+	font-family: inherit;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.self-assessment-field textarea:focus {
+	outline: none;
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+}
+
+.self-assessment-ratings {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+}
+
+.self-assessment-ratings label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	font-size: 0.9rem;
+	color: var(--text-primary);
+}
+
+.self-assessment-ratings select {
+	padding: 0.5rem 0.75rem;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	background: var(--bg-secondary);
+	color: var(--text-primary);
+	font-size: 0.95rem;
+}
+
+.self-assessment-error {
+	padding: 0.75rem 1rem;
+	border-radius: 6px;
+	background: rgba(244, 67, 54, 0.14);
+	border: 1px solid rgba(244, 67, 54, 0.35);
+	color: var(--color-error);
+	font-size: 0.9rem;
+}
+
+.self-assessment-modal .modal-footer {
+	position: sticky;
+	bottom: 0;
+	background: var(--card-bg);
+}

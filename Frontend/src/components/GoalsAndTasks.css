@@ -20,6 +20,11 @@
   background: var(--bg-secondary);
 }
 
+.goal-item.awaiting {
+  border-left: 4px solid var(--color-accent);
+  box-shadow: var(--shadow-md);
+}
+
 .goal-header {
   display: flex;
   align-items: center;
@@ -426,4 +431,63 @@
 .badge.personal {
   background: rgba(255, 152, 0, 0.18);
   color: var(--color-warning);
+}
+
+.category-section {
+  margin-bottom: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.category-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.category-header h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.category-header span {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.category-empty {
+  padding: 1.5rem;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.self-assessment-callout {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 107, 53, 0.35);
+  background: rgba(255, 107, 53, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.self-assessment-callout p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.self-assessment-callout .btn {
+  margin: 0;
 }
