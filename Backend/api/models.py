@@ -79,7 +79,7 @@ class Goal(models.Model):
         ('manager', 'Руководитель'),
     ]
     
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='legacy_goals')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='goals')
     created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='created_goals')
     creator_type = models.CharField(max_length=20, choices=CREATOR_TYPES, default='self')
     title = models.CharField(max_length=300)
@@ -98,7 +98,7 @@ class Goal(models.Model):
     participants = models.ManyToManyField(
         Employee,
         through='GoalParticipant',
-        related_name='goals'
+        related_name='shared_goals'
     )
     
     class Meta:

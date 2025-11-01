@@ -87,12 +87,13 @@ class Migration(migrations.Migration):
             ],
             options={
                 'unique_together': {('goal', 'employee')},
+                'ordering': ['joined_at'],
             },
         ),
         migrations.AddField(
             model_name='goal',
             name='participants',
-            field=models.ManyToManyField(related_name='goals', through='api.GoalParticipant', to='api.employee'),
+            field=models.ManyToManyField(related_name='shared_goals', through='api.GoalParticipant', to='api.employee'),
         ),
         migrations.AddField(
             model_name='task',
