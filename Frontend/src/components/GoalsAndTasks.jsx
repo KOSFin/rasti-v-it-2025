@@ -169,7 +169,8 @@ function GoalsAndTasks() {
     if (!canAssign) return;
 
     const params = { page_size: 300, ordering: 'user__last_name' };
-    if (isManager && employee?.department) {
+    // Фильтр по отделу применяется только для менеджеров, НЕ для админов
+    if (isManager && !isAdmin && employee?.department) {
       params.department = employee.department;
     }
 
