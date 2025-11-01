@@ -419,17 +419,9 @@ function GoalsAndTasks() {
       completed: [],
     };
 
-    const currentEmployeeId = employee?.id;
-
     filteredGoals.forEach((goal) => {
-      // Проверяем, является ли текущий сотрудник участником этой цели
-      const isParticipant = goal.participants_info?.some(
-        p => Number(p.employee) === Number(currentEmployeeId)
-      ) || Number(goal.employee) === Number(currentEmployeeId);
-
       const awaitingEvaluation =
         goal.is_completed &&
-        isParticipant && // Важно: показываем в "ожидающих оценки" только цели, в которых участвует сотрудник
         (goal.evaluation_launched || pendingSelfGoalIds.has(goal.id)) &&
         ((goal.evaluations_pending ?? 0) > 0 || pendingSelfGoalIds.has(goal.id));
 
@@ -443,7 +435,7 @@ function GoalsAndTasks() {
     });
 
     return buckets;
-  }, [filteredGoals, pendingSelfGoalIds, employee?.id]);
+  }, [filteredGoals, pendingSelfGoalIds]);
 
   const handleAddParticipant = (participantId) => {
     if (savingGoal) {
