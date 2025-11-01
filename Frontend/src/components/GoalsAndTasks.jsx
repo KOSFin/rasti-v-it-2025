@@ -117,41 +117,6 @@ function GoalsAndTasks() {
   const isAdmin = Boolean(user?.is_superuser);
   const canAssign = isAdmin || isManager;
 
-  // Мемоизированные значения для участников цели
-  const employeesLookup = useMemo(() => {
-    return employees.reduce((acc, item) => {
-      acc[String(item.id)] = item;
-      return acc;
-    }, {});
-  }, [employees]);
-
-  const normalizedParticipants = useMemo(
-    () => goalFormData.participants.map((item) => String(item)).filter(Boolean),
-    [goalFormData.participants]
-  );
-
-  const selectedParticipants = useMemo(() => {
-    return normalizedParticipants.map((participantId) => {
-      const employeeData = employeesLookup[participantId];
-      if (employeeData) {
-        return employeeData;
-      }
-      return {
-        id: participantId,
-        full_name: `Сотрудник #${participantId}`,
-        username: `user-${participantId}`,
-        position_name: '',
-        position_title: '',
-        department_name: '',
-      };
-    });
-  }, [normalizedParticipants, employeesLookup]);
-
-  const ownerParticipantId = useMemo(
-    () => normalizedParticipants[0] || '',
-    [normalizedParticipants]
-  );
-
   const updateGoalTaskState = (goalId, taskId, updater) => {
     setGoals((prevGoals) =>
       prevGoals.map((goalItem) => {
@@ -376,6 +341,37 @@ function GoalsAndTasks() {
     () => new Set(pendingSelfGoals.map((goal) => goal.id)),
     [pendingSelfGoals]
   );
+
+  const employeesLookup = useMemo(() => {
+    return employees.reduce((acc, item) => {
+      acc[String(item.id)] = item;
+      return acc;
+    }, {});
+  }, [employees]);
+
+  const normalizedParticipants = useMemo(
+    () => goalFormData.participants.map((item) => String(item)).filter(Boolean),
+    [goalFormData.participants]
+  );
+
+  const selectedParticipants = useMemo(() => {
+    return normalizedParticipants.map((participantId) => {
+      const employeeData = employeesLookup[participantId];
+      if (employeeData) {
+        return employeeData;
+      }
+      return {
+        id: participantId,
+        full_name: `Сотрудник #${participantId}`,
+        username: `user-${participantId}`,
+        position_name: '',
+        position_title: '',
+        department_name: '',
+      };
+    });
+  }, [normalizedParticipants, employeesLookup]);
+
+  const ownerParticipantId = normalizedParticipants[0] || '';
 
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
