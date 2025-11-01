@@ -3,6 +3,7 @@ import {
   getNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  getGoalNotificationsUnreadCount,
 } from '../api/services';
 import { useAuth } from './AuthContext';
 
@@ -12,6 +13,7 @@ export const NotificationProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [goalEvaluationCount, setGoalEvaluationCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const pollerRef = useRef(null);
@@ -20,16 +22,24 @@ export const NotificationProvider = ({ children }) => {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
+      setGoalEvaluationCount(0);
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await getNotifications({ limit: 20 });
-      const { results = [], unread_count: unread = 0 } = response.data || {};
+      const [notifResponse, goalCountResponse] = await Promise.all([
+        getNotifications({ limit: 20 }),
+        getGoalNotificationsUnreadCount(),
+      ]);
+      
+      const { results = [], unread_count: unread = 0 } = notifResponse.data || {};
+      const { count: goalCount = 0 } = goalCountResponse.data || {};
+      
       setNotifications(results);
       setUnreadCount(unread);
+      setGoalEvaluationCount(goalCount);
       setError(null);
     } catch (fetchError) {
       console.error('Не удалось загрузить уведомления', fetchError);
@@ -102,13 +112,15 @@ export const NotificationProvider = ({ children }) => {
     () => ({
       notifications,
       unreadCount,
+      goalEvaluationCount,
+      totalUnread: unreadCount + goalEvaluationCount,
       loading,
       error,
       refresh: fetchNotifications,
       markAsRead,
       markAllAsRead,
     }),
-    [notifications, unreadCount, loading, error, fetchNotifications, markAsRead, markAllAsRead]
+    [notifications, unreadCount, goalEvaluationCount, loading, error, fetchNotifications, markAsRead, markAllAsRead]
   );
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;

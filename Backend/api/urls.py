@@ -14,6 +14,7 @@ router.register(r'feedback-360', views.Feedback360ViewSet, basename='feedback-36
 router.register(r'manager-reviews', views.ManagerReviewViewSet, basename='manager-review')
 router.register(r'potential-assessments', views.PotentialAssessmentViewSet, basename='potential-assessment')
 router.register(r'final-reviews', views.FinalReviewViewSet, basename='final-review')
+router.register(r'goal-notifications', views.GoalEvaluationNotificationViewSet, basename='goal-notification')
 
 urlpatterns = [
     path('api/', include(router.urls)),

@@ -94,7 +94,7 @@ class GoalViewSet(viewsets.ModelViewSet):
     serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['goal_type', 'employee']
+    filterset_fields = ['goal_type', 'employee', 'is_completed', 'creator_type']
     search_fields = ['title', 'description']
     ordering_fields = ['start_date', 'end_date', 'created_at']
     
@@ -103,17 +103,20 @@ class GoalViewSet(viewsets.ModelViewSet):
         try:
             employee = Employee.objects.get(user=user)
             if user.is_superuser:
-                return Goal.objects.all()
+                return Goal.objects.all().prefetch_related('tasks')
             if employee.is_manager:
                 # Менеджер видит цели своего отдела
-                return Goal.objects.filter(employee__department=employee.department)
-            return Goal.objects.filter(employee=employee)
+                return Goal.objects.filter(employee__department=employee.department).prefetch_related('tasks')
+            return Goal.objects.filter(employee=employee).prefetch_related('tasks')
         except Employee.DoesNotExist:
-            return Goal.objects.all() if user.is_superuser else Goal.objects.none()
+            return Goal.objects.all().prefetch_related('tasks') if user.is_superuser else Goal.objects.none()
     
     def perform_create(self, serializer):
         user = self.request.user
+        current_employee = Employee.objects.get(user=user)
         target_employee = None
+        creator_type = 'self'
+        requires_evaluation = self.request.data.get('requires_evaluation', False)
 
         if user.is_superuser:
             employee_id = self.request.data.get('employee')
@@ -121,27 +124,104 @@ class GoalViewSet(viewsets.ModelViewSet):
                 target_employee = Employee.objects.filter(pk=employee_id).first()
                 if not target_employee:
                     raise ValidationError({'employee': 'Выбранный сотрудник не найден.'})
+                creator_type = 'manager' if target_employee != current_employee else 'self'
         else:
-            employee = Employee.objects.get(user=user)
             employee_id = self.request.data.get('employee')
-            if employee.is_manager and employee_id:
-                target_employee = Employee.objects.filter(pk=employee_id, department=employee.department).first()
+            if current_employee.is_manager and employee_id:
+                target_employee = Employee.objects.filter(pk=employee_id, department=current_employee.department).first()
                 if not target_employee:
                     raise ValidationError({'employee': 'Можно назначать цели только сотрудникам своего отдела.'})
+                creator_type = 'manager' if target_employee.id != current_employee.id else 'self'
             else:
-                target_employee = employee
+                target_employee = current_employee
+                creator_type = 'self'
 
         if not target_employee:
             raise ValidationError({'employee': 'Не удалось определить сотрудника для цели.'})
 
-        serializer.save(employee=target_employee)
+        # Если цель создается руководителем для другого сотрудника, requires_evaluation устанавливается руководителем
+        # Если сотрудник создает цель себе, requires_evaluation не устанавливается при создании
+        if creator_type == 'self':
+            requires_evaluation = False
+
+        serializer.save(
+            employee=target_employee,
+            created_by=current_employee,
+            creator_type=creator_type,
+            requires_evaluation=requires_evaluation
+        )
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Завершить цель и запустить оценку"""
+        from django.utils import timezone
+        
+        goal = self.get_object()
+        user = request.user
+        
+        try:
+            employee = Employee.objects.get(user=user)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Сотрудник не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем, что пользователь имеет право завершить цель
+        if goal.employee != employee and not user.is_superuser:
+            return Response({'error': 'Вы не можете завершить эту цель'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Проверяем, что все задачи выполнены
+        uncompleted_tasks = goal.tasks.filter(is_completed=False).count()
+        if uncompleted_tasks > 0:
+            return Response(
+                {'error': f'Не все задачи выполнены. Осталось: {uncompleted_tasks}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Получаем параметр запуска оценки
+        launch_evaluation = request.data.get('launch_evaluation', goal.requires_evaluation)
+        
+        # Завершаем цель
+        goal.is_completed = True
+        goal.completed_at = timezone.now()
+        goal.evaluation_launched = bool(launch_evaluation)
+        goal.save()
+        
+        # Если нужно запустить оценку
+        if launch_evaluation:
+            # Создаем самооценку для сотрудника
+            SelfAssessment.objects.get_or_create(
+                employee=goal.employee,
+                goal=goal,
+                defaults={
+                    'achieved_results': '',
+                    'personal_contribution': '',
+                    'skills_acquired': '',
+                    'improvements_needed': '',
+                    'collaboration_quality': 0,
+                    'satisfaction_score': 0,
+                }
+            )
+            
+            # Создаем уведомления для коллег из того же отдела
+            colleagues = Employee.objects.filter(
+                department=goal.employee.department
+            ).exclude(id=goal.employee.id)
+            
+            for colleague in colleagues:
+                GoalEvaluationNotification.objects.get_or_create(
+                    recipient=colleague,
+                    goal=goal
+                )
+        
+        serializer = self.get_serializer(goal)
+        return Response(serializer.data)
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['goal', 'is_completed']
     search_fields = ['title', 'description']
+    ordering_fields = ['order', 'created_at']
     
     def get_queryset(self):
         user = self.request.user
@@ -154,12 +234,27 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Task.objects.filter(goal__employee=employee)
         except Employee.DoesNotExist:
             return Task.objects.all() if user.is_superuser else Task.objects.none()
+    
+    def perform_update(self, serializer):
+        from django.utils import timezone
+        
+        task = self.get_object()
+        is_completed = serializer.validated_data.get('is_completed', task.is_completed)
+        
+        # Если задача отмечается как выполненная
+        if is_completed and not task.is_completed:
+            serializer.save(completed_at=timezone.now())
+        # Если задача отмечается как невыполненная
+        elif not is_completed and task.is_completed:
+            serializer.save(completed_at=None)
+        else:
+            serializer.save()
 
 class SelfAssessmentViewSet(viewsets.ModelViewSet):
     serializer_class = SelfAssessmentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['employee', 'task']
+    filterset_fields = ['employee', 'goal']
     ordering_fields = ['created_at', 'calculated_score']
     
     def get_queryset(self):
@@ -167,10 +262,29 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         try:
             employee = Employee.objects.get(user=user)
             if employee.is_manager:
-                return SelfAssessment.objects.filter(employee__department=employee.department)
-            return SelfAssessment.objects.filter(employee=employee)
+                return SelfAssessment.objects.filter(employee__department=employee.department).select_related('goal', 'employee')
+            return SelfAssessment.objects.filter(employee=employee).select_related('goal', 'employee')
         except Employee.DoesNotExist:
             return SelfAssessment.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        """Получить список целей, для которых нужно заполнить самооценку"""
+        user = self.request.user
+        try:
+            employee = Employee.objects.get(user=user)
+            # Находим завершенные цели с запущенной оценкой, для которых еще нет самооценки
+            completed_goals = Goal.objects.filter(
+                employee=employee,
+                is_completed=True,
+                evaluation_launched=True
+            ).exclude(
+                self_assessments__employee=employee
+            )
+            serializer = GoalSerializer(completed_goals, many=True)
+            return Response(serializer.data)
+        except Employee.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
     
     def perform_create(self, serializer):
         user = self.request.user
@@ -188,7 +302,7 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
     serializer_class = Feedback360Serializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['assessor', 'employee', 'task']
+    filterset_fields = ['assessor', 'employee', 'goal']
     ordering_fields = ['created_at', 'calculated_score']
     
     def get_queryset(self):
@@ -196,7 +310,7 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         try:
             employee = Employee.objects.get(user=user)
             # Пользователь видит оценки, которые он дал
-            return Feedback360.objects.filter(assessor=employee)
+            return Feedback360.objects.filter(assessor=employee).select_related('goal', 'employee')
         except Employee.DoesNotExist:
             return Feedback360.objects.none()
     
@@ -206,7 +320,7 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            feedbacks = Feedback360.objects.filter(employee=employee)
+            feedbacks = Feedback360.objects.filter(employee=employee).select_related('goal', 'assessor')
             serializer = self.get_serializer(feedbacks, many=True)
             return Response(serializer.data)
         except Employee.DoesNotExist:
@@ -214,15 +328,16 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def pending(self, request):
-        """Получить список сотрудников, которым нужно дать оценку"""
+        """Получить список уведомлений о необходимости оценить цели коллег"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            # Получаем коллег из того же отдела
-            colleagues = Employee.objects.filter(
-                department=employee.department
-            ).exclude(id=employee.id)
-            serializer = EmployeeSerializer(colleagues, many=True)
+            # Получаем непрочитанные и невыполненные уведомления
+            notifications = GoalEvaluationNotification.objects.filter(
+                recipient=employee,
+                is_completed=False
+            ).select_related('goal', 'goal__employee')
+            serializer = GoalEvaluationNotificationSerializer(notifications, many=True)
             return Response(serializer.data)
         except Employee.DoesNotExist:
             return Response([], status=status.HTTP_200_OK)
@@ -238,12 +353,24 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         
         total_score = results_score + collaboration_score
         serializer.save(assessor=employee, calculated_score=total_score)
+        
+        # Отметить уведомление как выполненное
+        goal = data['goal']
+        try:
+            notification = GoalEvaluationNotification.objects.get(
+                recipient=employee,
+                goal=goal
+            )
+            notification.is_completed = True
+            notification.save()
+        except GoalEvaluationNotification.DoesNotExist:
+            pass
 
 class ManagerReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ManagerReviewSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['manager', 'employee', 'task']
+    filterset_fields = ['manager', 'employee', 'goal']
     ordering_fields = ['created_at', 'calculated_score']
     
     def get_queryset(self):
@@ -252,10 +379,10 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
             employee = Employee.objects.get(user=user)
             if employee.is_manager:
                 # Менеджер видит свои оценки
-                return ManagerReview.objects.filter(manager=employee)
+                return ManagerReview.objects.filter(manager=employee).select_related('goal', 'employee')
             else:
                 # Сотрудник видит оценки, данные ему
-                return ManagerReview.objects.filter(employee=employee)
+                return ManagerReview.objects.filter(employee=employee).select_related('goal', 'manager')
         except Employee.DoesNotExist:
             return ManagerReview.objects.none()
     
@@ -394,6 +521,44 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
             nine_box_x=nine_box_x,
             nine_box_y=nine_box_y
         )
+
+class GoalEvaluationNotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = GoalEvaluationNotificationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['is_read', 'is_completed']
+    ordering_fields = ['created_at']
+    
+    def get_queryset(self):
+        user = self.request.user
+        try:
+            employee = Employee.objects.get(user=user)
+            return GoalEvaluationNotification.objects.filter(recipient=employee).select_related('goal', 'goal__employee')
+        except Employee.DoesNotExist:
+            return GoalEvaluationNotification.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def unread_count(self, request):
+        """Получить количество непрочитанных уведомлений"""
+        user = self.request.user
+        try:
+            employee = Employee.objects.get(user=user)
+            count = GoalEvaluationNotification.objects.filter(
+                recipient=employee,
+                is_completed=False
+            ).count()
+            return Response({'count': count})
+        except Employee.DoesNotExist:
+            return Response({'count': 0})
+    
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """Отметить уведомление как прочитанное"""
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        serializer = self.get_serializer(notification)
+        return Response(serializer.data)
 
 class FinalReviewViewSet(viewsets.ModelViewSet):
     serializer_class = FinalReviewSerializer

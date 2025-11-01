@@ -115,29 +115,39 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
             'password': password,
         }
 
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = '__all__'
+
 class GoalSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     department_name = serializers.CharField(source='employee.department.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.user.get_full_name', read_only=True, allow_null=True)
+    tasks = TaskSerializer(many=True, read_only=True)
+    tasks_completed = serializers.SerializerMethodField()
+    tasks_total = serializers.SerializerMethodField()
 
     class Meta:
         model = Goal
         fields = '__all__'
         extra_kwargs = {
             'employee': {'required': False, 'allow_null': True},
+            'created_by': {'required': False, 'allow_null': True},
         }
+    
+    def get_tasks_completed(self, obj):
+        return obj.tasks.filter(is_completed=True).count()
+    
+    def get_tasks_total(self, obj):
+        return obj.tasks.count()
 
-class TaskSerializer(serializers.ModelSerializer):
-    goal_title = serializers.CharField(source='goal.title', read_only=True)
-    employee_name = serializers.CharField(source='goal.employee.user.get_full_name', read_only=True)
-    department_name = serializers.CharField(source='goal.employee.department.name', read_only=True)
 
-    class Meta:
-        model = Task
-        fields = '__all__'
 
 class SelfAssessmentSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
-    task_title = serializers.CharField(source='task.title', read_only=True)
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    goal_tasks = TaskSerializer(source='goal.tasks', many=True, read_only=True)
 
     class Meta:
         model = SelfAssessment
@@ -149,7 +159,8 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
 class Feedback360Serializer(serializers.ModelSerializer):
     assessor_name = serializers.CharField(source='assessor.user.get_full_name', read_only=True)
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
-    task_title = serializers.CharField(source='task.title', read_only=True)
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    goal_tasks = TaskSerializer(source='goal.tasks', many=True, read_only=True)
     
     class Meta:
         model = Feedback360
@@ -161,7 +172,8 @@ class Feedback360Serializer(serializers.ModelSerializer):
 class ManagerReviewSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
-    task_title = serializers.CharField(source='task.title', read_only=True)
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    goal_tasks = TaskSerializer(source='goal.tasks', many=True, read_only=True)
     
     class Meta:
         model = ManagerReview
@@ -169,6 +181,16 @@ class ManagerReviewSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'manager': {'required': False},
         }
+
+class GoalEvaluationNotificationSerializer(serializers.ModelSerializer):
+    recipient_name = serializers.CharField(source='recipient.user.get_full_name', read_only=True)
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    goal_employee_name = serializers.CharField(source='goal.employee.user.get_full_name', read_only=True)
+    department_name = serializers.CharField(source='goal.employee.department.name', read_only=True)
+    
+    class Meta:
+        model = GoalEvaluationNotification
+        fields = '__all__'
 
 class PotentialAssessmentSerializer(serializers.ModelSerializer):
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)

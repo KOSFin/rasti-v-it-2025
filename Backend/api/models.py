@@ -25,7 +25,14 @@ class Goal(models.Model):
         ('personal', 'Личное развитие'),
     ]
     
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    CREATOR_TYPES = [
+        ('self', 'Сотрудник'),
+        ('manager', 'Руководитель'),
+    ]
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='goals')
+    created_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='created_goals')
+    creator_type = models.CharField(max_length=20, choices=CREATOR_TYPES, default='self')
     title = models.CharField(max_length=300)
     description = models.TextField()
     goal_type = models.CharField(max_length=20, choices=GOAL_TYPES)
@@ -33,23 +40,37 @@ class Goal(models.Model):
     end_date = models.DateField()
     expected_results = models.TextField()
     task_link = models.URLField(blank=True)
+    requires_evaluation = models.BooleanField(default=False)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    evaluation_launched = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.employee.user.get_full_name()}"
 
 class Task(models.Model):
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=300)
     description = models.TextField()
     is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
     
     def __str__(self):
         return self.title
 
 class SelfAssessment(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='self_assessments')
     
     # Вопросы самооценки
     achieved_results = models.TextField()
@@ -61,11 +82,14 @@ class SelfAssessment(models.Model):
     
     calculated_score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['employee', 'goal']
 
 class Feedback360(models.Model):
     assessor = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='given_feedbacks')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_feedbacks')
-    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='feedbacks')
     
     # Вопросы оценки 360
     results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
@@ -75,11 +99,14 @@ class Feedback360(models.Model):
     
     calculated_score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['assessor', 'employee', 'goal']
 
 class ManagerReview(models.Model):
     manager = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='given_reviews')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_reviews')
-    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='manager_reviews')
     
     # Вопросы оценки руководителя
     results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
@@ -92,6 +119,9 @@ class ManagerReview(models.Model):
     calculated_score = models.IntegerField(default=0)
     feedback_summary = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['manager', 'employee', 'goal']
 
 class PotentialAssessment(models.Model):
     manager = models.ForeignKey(Employee, on_delete=models.CASCADE)
@@ -135,6 +165,21 @@ class PotentialAssessment(models.Model):
     nine_box_y = models.IntegerField(null=True, blank=True)  # Потенциал
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+class GoalEvaluationNotification(models.Model):
+    """Уведомление о необходимости оценить завершенную цель коллеги"""
+    recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='evaluation_notifications')
+    goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='evaluation_notifications')
+    is_read = models.BooleanField(default=False)
+    is_completed = models.BooleanField(default=False)  # Оценка выполнена
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['recipient', 'goal']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Notification for {self.recipient.user.get_full_name()} to evaluate {self.goal.title}"
 
 class FinalReview(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)

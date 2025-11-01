@@ -67,6 +67,9 @@ export const updateGoal = (id, data) =>
 export const deleteGoal = (id) => 
   api.delete(`/api/goals/${id}/`);
 
+export const completeGoal = (id, data) =>
+  api.post(`/api/goals/${id}/complete/`, data);
+
 // Tasks
 export const getTasks = (params) => 
   api.get('/api/tasks/', { params });
@@ -86,6 +89,9 @@ export const deleteTask = (id) =>
 // Self Assessments
 export const getSelfAssessments = (params) => 
   api.get('/api/self-assessments/', { params });
+
+export const getPendingSelfAssessments = () =>
+  api.get('/api/self-assessments/pending/');
 
 export const getSelfAssessment = (id) => 
   api.get(`/api/self-assessments/${id}/`);
@@ -183,3 +189,13 @@ export const markNotificationRead = (id) =>
 
 export const markAllNotificationsRead = () =>
   api.post('/api/performance/notifications/mark-all/');
+
+// Goal Evaluation Notifications
+export const getGoalNotifications = (params) =>
+  api.get('/api/goal-notifications/', { params });
+
+export const getGoalNotificationsUnreadCount = () =>
+  api.get('/api/goal-notifications/unread_count/');
+
+export const markGoalNotificationRead = (id) =>
+  api.post(`/api/goal-notifications/${id}/mark_read/`);

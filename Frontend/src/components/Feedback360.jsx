@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiPlus, FiUsers, FiTarget, FiSend } from 'react-icons/fi';
+import { FiPlus, FiUsers, FiTarget, FiSend, FiCheckCircle } from 'react-icons/fi';
 import {
   getPendingFeedback360,
   getFeedback360ForMe,
   getFeedback360List,
-  getTasks,
+  getGoals,
   createFeedback360,
 } from '../api/services';
 import './Common.css';
@@ -21,7 +21,7 @@ const extractResults = (response) => {
 
 const DEFAULT_FORM = {
   employee: '',
-  task: '',
+  goal: '',
   results_achievement: 5,
   personal_qualities: '',
   collaboration_quality: 5,
@@ -29,10 +29,10 @@ const DEFAULT_FORM = {
 };
 
 function Feedback360() {
-  const [pendingColleagues, setPendingColleagues] = useState([]);
+  const [pendingEvaluations, setPendingEvaluations] = useState([]);
   const [feedbackAboutMe, setFeedbackAboutMe] = useState([]);
   const [feedbackIGave, setFeedbackIGave] = useState([]);
-  const [tasks, setTasks] = useState([]);
+  const [completedGoals, setCompletedGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -44,16 +44,16 @@ function Feedback360() {
     setError('');
 
     try {
-      const [pendingRes, forMeRes, tasksRes, givenRes] = await Promise.all([
-        getPendingFeedback360(),
+      const [pendingRes, forMeRes, goalsRes, givenRes] = await Promise.all([
+        getPendingFeedback360(), // Это вернет уведомления
         getFeedback360ForMe(),
-        getTasks({ page_size: 200 }),
+        getGoals({ page_size: 200, is_completed: true, evaluation_launched: true }),
         getFeedback360List({ page_size: 200, ordering: '-created_at' }),
       ]);
 
-      setPendingColleagues(Array.isArray(pendingRes?.data) ? pendingRes.data : extractResults(pendingRes));
+      setPendingEvaluations(Array.isArray(pendingRes?.data) ? pendingRes.data : extractResults(pendingRes));
       setFeedbackAboutMe(Array.isArray(forMeRes?.data) ? forMeRes.data : extractResults(forMeRes));
-      setTasks(extractResults(tasksRes));
+      setCompletedGoals(extractResults(goalsRes));
       setFeedbackIGave(extractResults(givenRes));
     } catch (err) {
       console.error('Не удалось загрузить данные 360', err);
@@ -73,12 +73,12 @@ function Feedback360() {
       : '0.0';
 
     return {
-      pending: pendingColleagues.length,
+      pending: pendingEvaluations.length,
       received: feedbackAboutMe.length,
       sent: feedbackIGave.length,
       averageScore: avgScore,
     };
-  }, [pendingColleagues, feedbackAboutMe, feedbackIGave]);
+  }, [pendingEvaluations, feedbackAboutMe, feedbackIGave]);
 
   const handleChange = (event) => {
     const { name, value, type } = event.target;
@@ -91,19 +91,18 @@ function Feedback360() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!formData.employee || !formData.task) {
-      setError('Выберите сотрудника и задачу.');
+    if (!formData.employee || !formData.goal) {
+      setError('Выберите сотрудника и цель.');
       return;
     }
 
     setSaving(true);
 
     try {
-      // Убедимся что employee передается как число
       const payload = {
         ...formData,
         employee: Number(formData.employee),
-        task: Number(formData.task),
+        goal: Number(formData.goal),
         results_achievement: Number(formData.results_achievement),
         collaboration_quality: Number(formData.collaboration_quality),
       };
@@ -115,7 +114,7 @@ function Feedback360() {
     } catch (err) {
       console.error('Не удалось отправить оценку', err);
       const errorMessage = err.response?.data?.employee?.[0] 
-        || err.response?.data?.task?.[0]
+        || err.response?.data?.goal?.[0]
         || err.response?.data?.error 
         || err.response?.data?.detail 
         || 'Не удалось отправить оценку. Попробуйте позже.';
@@ -170,20 +169,20 @@ function Feedback360() {
               <span>Коллега *</span>
               <select name="employee" value={formData.employee} onChange={handleChange} required>
                 <option value="">Выберите коллегу</option>
-                {pendingColleagues.map((colleague) => (
-                  <option key={colleague.id} value={colleague.id}>
-                    {colleague.full_name} · {colleague.position}
+                {pendingEvaluations.map((notif) => (
+                  <option key={notif.goal} value={notif.goal_employee_name}>
+                    {notif.goal_employee_name}
                   </option>
                 ))}
               </select>
             </label>
             <label className="form-field">
-              <span>Задача *</span>
-              <select name="task" value={formData.task} onChange={handleChange} required>
-                <option value="">Выберите задачу</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
+              <span>Цель *</span>
+              <select name="goal" value={formData.goal} onChange={handleChange} required>
+                <option value="">Выберите цель</option>
+                {completedGoals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.title} — {goal.employee_name}
                   </option>
                 ))}
               </select>
@@ -258,18 +257,19 @@ function Feedback360() {
                 <h2>
                   <FiUsers size={18} /> Ожидают вашей оценки
                 </h2>
-                <span>{pendingColleagues.length}</span>
+                <span>{pendingEvaluations.length}</span>
               </header>
               <ul className="list">
-                {pendingColleagues.length === 0 && <li className="empty">Все коллеги уже оценены</li>}
-                {pendingColleagues.map((colleague) => (
-                  <li key={colleague.id}>
+                {pendingEvaluations.length === 0 && <li className="empty">Все цели коллег уже оценены</li>}
+                {pendingEvaluations.map((notif) => (
+                  <li key={notif.id}>
                     <div>
-                      <strong>{colleague.full_name}</strong>
-                      <span>{colleague.position}</span>
+                      <strong>{notif.goal_employee_name}</strong>
+                      <span>{notif.goal_title}</span>
+                      {notif.department_name && <span className="tag muted">{notif.department_name}</span>}
                     </div>
                     <button type="button" className="btn ghost" onClick={() => {
-                      setFormData((prev) => ({ ...prev, employee: colleague.id }));
+                      setFormData((prev) => ({ ...prev, goal: notif.goal, employee: notif.goal?.employee }));
                       setShowForm(true);
                     }}>
                       Оценить
@@ -292,7 +292,19 @@ function Feedback360() {
                   <li key={feedback.id}>
                     <div>
                       <strong>{feedback.assessor_name}</strong>
-                      <span>{feedback.task_title}</span>
+                      <span>{feedback.goal_title}</span>
+                      {feedback.goal_tasks && feedback.goal_tasks.length > 0 && (
+                        <div className="tasks-preview">
+                          <small>Задачи:</small>
+                          <ul>
+                            {feedback.goal_tasks.filter(t => t.is_completed).map(task => (
+                              <li key={task.id}>
+                                <FiCheckCircle size={12} /> {task.title}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                     <div className="tag-group">
                       <span className="tag accent">Итог {feedback.calculated_score}</span>
@@ -318,7 +330,7 @@ function Feedback360() {
                   <li key={feedback.id}>
                     <div>
                       <strong>{feedback.employee_name}</strong>
-                      <span>{feedback.task_title}</span>
+                      <span>{feedback.goal_title}</span>
                     </div>
                     <div className="tag-group">
                       <span className="tag accent">{feedback.calculated_score} баллов</span>

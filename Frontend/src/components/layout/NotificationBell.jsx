@@ -5,7 +5,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import './NotificationBell.css';
 
 const NotificationBell = () => {
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, refresh } = useNotifications();
+  const { notifications, totalUnread, loading, markAsRead, markAllAsRead, refresh } = useNotifications();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
@@ -66,7 +66,7 @@ const NotificationBell = () => {
         aria-label="Уведомления"
       >
         <FiBell size={18} />
-        {unreadCount > 0 && <span className="notification-badge">{Math.min(unreadCount, 9)}{unreadCount > 9 ? '+' : ''}</span>}
+        {totalUnread > 0 && <span className="notification-badge">{Math.min(totalUnread, 9)}{totalUnread > 9 ? '+' : ''}</span>}
       </button>
 
       {open && (
@@ -74,9 +74,9 @@ const NotificationBell = () => {
           <header className="notification-header">
             <div>
               <h4>Уведомления</h4>
-              <span>{loading ? 'Обновляем…' : `${unreadCount} непрочитанных`}</span>
+              <span>{loading ? 'Обновляем…' : `${totalUnread} непрочитанных`}</span>
             </div>
-            {hasNotifications && unreadCount > 0 && (
+            {hasNotifications && totalUnread > 0 && (
               <button type="button" className="mark-all" onClick={markAllAsRead}>
                 <FiCheckCircle size={14} />
                 <span>Отметить все</span>
