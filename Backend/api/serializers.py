@@ -331,6 +331,10 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
         }
 
 class Feedback360Serializer(serializers.ModelSerializer):
+    # assessor is set server-side from the request user; mark read-only so
+    # validation doesn't require it (unique_together validator runs before
+    # perform_create and would fail otherwise).
+    assessor = serializers.PrimaryKeyRelatedField(read_only=True)
     assessor_name = serializers.CharField(source='assessor.user.get_full_name', read_only=True)
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     goal_title = serializers.CharField(source='goal.title', read_only=True)
@@ -344,6 +348,9 @@ class Feedback360Serializer(serializers.ModelSerializer):
         }
 
 class ManagerReviewSerializer(serializers.ModelSerializer):
+    # manager is assigned server-side for new reviews (from request user),
+    # keep it read-only to avoid validation issues similar to Feedback360
+    manager = serializers.PrimaryKeyRelatedField(read_only=True)
     manager_name = serializers.CharField(source='manager.user.get_full_name', read_only=True)
     employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     goal_title = serializers.CharField(source='goal.title', read_only=True)

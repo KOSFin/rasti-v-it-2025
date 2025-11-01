@@ -143,6 +143,15 @@
   animation: slideUp 0.3s ease;
 }
 
+/* larger modal variant used by some admin dialogs */
+.modal.large {
+  max-width: 1000px;
+}
+
+.modal.medium {
+  max-width: 780px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

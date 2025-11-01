@@ -429,9 +429,19 @@ function GoalsAndTasks() {
         (goal.evaluation_launched || pendingSelfGoalIds.has(goal.id)) &&
         ((goal.evaluations_pending ?? 0) > 0 || pendingSelfGoalIds.has(goal.id));
 
+      // Determine if current user is participant/owner of the goal
+      const participantsList = Array.isArray(goal.participants_info) ? goal.participants_info : [];
+      const isParticipant =
+        Number(goal.employee) === Number(employee?.id) ||
+        participantsList.some((p) => Number(p.employee) === Number(employee?.id));
+
       if (!goal.is_completed) {
         buckets.active.push(goal);
-      } else if (awaitingEvaluation) {
+      } else if (awaitingEvaluation && isParticipant) {
+        // Only show awaiting-evaluation goals that the current user is actually
+        // a participant of (owner or listed in participants_info). Other users
+        // (who may have evaluation notifications) will see those goals on the
+        // 360° page instead.
         buckets.awaiting.push(goal);
       } else {
         buckets.completed.push(goal);
