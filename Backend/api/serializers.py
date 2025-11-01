@@ -127,6 +127,8 @@ class GoalSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
     tasks_completed = serializers.SerializerMethodField()
     tasks_total = serializers.SerializerMethodField()
+    evaluations_received = serializers.SerializerMethodField()
+    evaluations_expected = serializers.SerializerMethodField()
 
     class Meta:
         model = Goal
@@ -141,6 +143,22 @@ class GoalSerializer(serializers.ModelSerializer):
     
     def get_tasks_total(self, obj):
         return obj.tasks.count()
+    
+    def get_evaluations_received(self, obj):
+        """Количество полученных оценок (завершённых фидбэков)"""
+        from .models import Feedback360
+        return Feedback360.objects.filter(goal=obj).count()
+    
+    def get_evaluations_expected(self, obj):
+        """Ожидаемое количество оценок (коллег из отдела)"""
+        if not obj.evaluation_launched:
+            return 0
+        from .models import Employee
+        department = obj.employee.department
+        if not department:
+            return 0
+        # Количество коллег из отдела (исключая самого сотрудника)
+        return Employee.objects.filter(department=department).exclude(id=obj.employee.id).count()
 
 
 
