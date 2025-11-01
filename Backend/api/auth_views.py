@@ -11,9 +11,10 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.settings import api_settings
 try:
-    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 except ModuleNotFoundError:  # blacklist app can be disabled in settings
     BlacklistedToken = None
+    OutstandingToken = None
 
 from .models import Department, DepartmentPosition, Employee
 from .serializers import (
@@ -207,12 +208,13 @@ def logout(request):
             try:
                 token = RefreshToken(refresh_token)
                 jti = token.payload.get(api_settings.JTI_CLAIM)
-                if BlacklistedToken and jti:
-                    already_blacklisted = BlacklistedToken.objects.filter(token__jti=jti).exists()
+                if BlacklistedToken and OutstandingToken and jti:
+                    outstanding = OutstandingToken.objects.filter(jti=jti).first()
+                    if outstanding:
+                        BlacklistedToken.objects.get_or_create(token=outstanding)
+                    else:
+                        token.blacklist()
                 else:
-                    already_blacklisted = False
-
-                if not already_blacklisted:
                     try:
                         token.blacklist()
                     except IntegrityError:
