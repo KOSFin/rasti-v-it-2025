@@ -207,21 +207,17 @@ def logout(request):
             try:
                 token = RefreshToken(refresh_token)
                 jti = token.payload.get(api_settings.JTI_CLAIM)
-                # Проверяем существование перед блэклистингом, чтобы не шуметь в логах
                 if BlacklistedToken and jti:
                     already_blacklisted = BlacklistedToken.objects.filter(token__jti=jti).exists()
                 else:
                     already_blacklisted = False
 
-                # Оборачиваем в try/catch, чтобы выдержать гонки и отсутствующий blacklist
                 if not already_blacklisted:
                     try:
                         token.blacklist()
                     except IntegrityError:
-                        # Токен уже заблокирован параллельно — это допустимо
                         pass
             except (AttributeError, TokenError):
-                # Если blacklist недоступен или токен некорректен, просто продолжаем
                 pass
         return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
     except Exception as e:
