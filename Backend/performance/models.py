@@ -319,7 +319,7 @@ class TeamRelation(TimeStampedModel):
     class Meta:
         unique_together = ("employer", "peer")
         indexes = [
-            models.Index(fields=["employer"], name="perf_team_relation_employer_idx"),
+            models.Index(fields=["employer"], name="perf_team_rel_emp_idx"),
         ]
 
 
