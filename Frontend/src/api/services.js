@@ -48,6 +48,9 @@ export const updateEmployee = (id, data) =>
 export const getTeam = (id) => 
   api.get(`/api/employees/${id}/team/`);
 
+export const getColleagues = () =>
+  api.get('/api/employees/colleagues/');
+
 export const deleteEmployee = (id) =>
   api.delete(`/api/employees/${id}/`);
 

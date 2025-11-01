@@ -145,6 +145,10 @@ const Sidebar = () => {
     ...(canSeeNineBox ? [{ path: '/nine-box', icon: FiGrid, label: 'Nine Box' }] : []),
   ];
 
+  if (!isAdmin && !isManager) {
+    navItems.splice(1, 0, { path: '/colleagues', icon: FiUsers, label: 'Коллеги' });
+  }
+
   if (isManager || isAdmin) {
     navItems.splice(1, 0, { path: '/team', icon: FiUsers, label: 'Команда' });
     navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });

@@ -93,6 +93,7 @@ function GoalsAndTasks() {
   const [goalFormData, setGoalFormData] = useState(initialGoalForm);
   const [goalFormError, setGoalFormError] = useState('');
   const [savingGoal, setSavingGoal] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState('');
 
   const [expandedGoals, setExpandedGoals] = useState(new Set());
   const [editingTask, setEditingTask] = useState(null);
@@ -213,6 +214,27 @@ function GoalsAndTasks() {
   }, [canAssign]);
 
   useEffect(() => {
+    if (!showGoalForm) {
+      setParticipantSearch('');
+    }
+  }, [showGoalForm]);
+
+  useEffect(() => {
+    if (
+      canAssign &&
+      ownerParticipantId &&
+      employee?.id &&
+      ownerParticipantId === String(employee.id) &&
+      goalFormData.requires_evaluation
+    ) {
+      setGoalFormData((prev) => ({
+        ...prev,
+        requires_evaluation: false,
+      }));
+    }
+  }, [canAssign, ownerParticipantId, employee?.id, goalFormData.requires_evaluation]);
+
+  useEffect(() => {
     const initialAssignee = searchParams.get('employee');
     if (initialAssignee && canAssign) {
       setAssigneeFilter(initialAssignee);
@@ -320,7 +342,36 @@ function GoalsAndTasks() {
     [pendingSelfGoals]
   );
 
-  const ownerParticipantId = goalFormData.participants[0] || '';
+  const employeesLookup = useMemo(() => {
+    return employees.reduce((acc, item) => {
+      acc[String(item.id)] = item;
+      return acc;
+    }, {});
+  }, [employees]);
+
+  const normalizedParticipants = useMemo(
+    () => goalFormData.participants.map((item) => String(item)).filter(Boolean),
+    [goalFormData.participants]
+  );
+
+  const selectedParticipants = useMemo(() => {
+    return normalizedParticipants.map((participantId) => {
+      const employeeData = employeesLookup[participantId];
+      if (employeeData) {
+        return employeeData;
+      }
+      return {
+        id: participantId,
+        full_name: `Сотрудник #${participantId}`,
+        username: `user-${participantId}`,
+        position_name: '',
+        position_title: '',
+        department_name: '',
+      };
+    });
+  }, [normalizedParticipants, employeesLookup]);
+
+  const ownerParticipantId = normalizedParticipants[0] || '';
 
   const filteredGoals = useMemo(() => {
     return goals.filter((goal) => {
@@ -338,6 +389,26 @@ function GoalsAndTasks() {
       return matchesType && matchesEmployee && matchesSearch;
     });
   }, [goals, filterType, searchTerm, assigneeFilter]);
+
+  const participantCandidates = useMemo(() => {
+    if (!canAssign) {
+      return [];
+    }
+
+    const query = participantSearch.trim().toLowerCase();
+    return employees
+      .filter((employeeItem) => !normalizedParticipants.includes(String(employeeItem.id)))
+      .filter((employeeItem) => {
+        if (!query) {
+          return true;
+        }
+        const name = (employeeItem.full_name || employeeItem.username || '').toLowerCase();
+        const position = (employeeItem.position_name || employeeItem.position_title || '').toLowerCase();
+        const department = (employeeItem.department_name || '').toLowerCase();
+        return [name, position, department].some((value) => value.includes(query));
+      })
+      .slice(0, 15);
+  }, [canAssign, employees, normalizedParticipants, participantSearch]);
 
   const pendingTaskSet = useMemo(() => new Set(pendingTaskIds), [pendingTaskIds]);
 
@@ -366,19 +437,51 @@ function GoalsAndTasks() {
     return buckets;
   }, [filteredGoals, pendingSelfGoalIds]);
 
-  const handleGoalFormChange = (event) => {
-    const { name, value, type, checked, options } = event.target;
-
-    if (name === 'participants') {
-      const selected = Array.from(options)
-        .filter((option) => option.selected)
-        .map((option) => option.value);
-      setGoalFormData((prev) => ({
-        ...prev,
-        participants: selected,
-      }));
+  const handleAddParticipant = (participantId) => {
+    if (savingGoal) {
       return;
     }
+    const key = String(participantId);
+    setGoalFormData((prev) => {
+      const existing = prev.participants.map((item) => String(item));
+      if (existing.includes(key)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        participants: [...existing, key],
+      };
+    });
+    setGoalFormError('');
+  };
+
+  const handleRemoveParticipant = (participantId) => {
+    if (savingGoal) {
+      return;
+    }
+    const key = String(participantId);
+    setGoalFormData((prev) => ({
+      ...prev,
+      participants: prev.participants.filter((item) => String(item) !== key),
+    }));
+  };
+
+  const handlePromoteParticipant = (participantId) => {
+    if (savingGoal) {
+      return;
+    }
+    const key = String(participantId);
+    setGoalFormData((prev) => {
+      const remaining = prev.participants.filter((item) => String(item) !== key);
+      return {
+        ...prev,
+        participants: [key, ...remaining],
+      };
+    });
+  };
+
+  const handleGoalFormChange = (event) => {
+    const { name, value, type, checked } = event.target;
 
     setGoalFormData((prev) => ({
       ...prev,
@@ -399,7 +502,7 @@ function GoalsAndTasks() {
 
     try {
       const payload = { ...goalFormData };
-      const participantIds = goalFormData.participants
+      const participantIds = normalizedParticipants
         .map((id) => Number(id))
         .filter((id) => !Number.isNaN(id) && id > 0);
 
@@ -678,7 +781,15 @@ function GoalsAndTasks() {
     const completedTasksTail = tasks.filter((task) => task.is_completed && !pendingTaskSet.has(task.id));
     const allTasksOrdered = [...visibleTasks, ...completedTasksTail];
     const participantsInfo = Array.isArray(goal.participants_info) ? goal.participants_info : [];
-    const ownerParticipant = participantsInfo.find((participant) => participant.is_owner);
+    const orderedParticipants = participantsInfo
+      .slice()
+      .sort((first, second) => {
+        if (first.is_owner === second.is_owner) {
+          return 0;
+        }
+        return first.is_owner ? -1 : 1;
+      });
+    const ownerParticipant = orderedParticipants.find((participant) => participant.is_owner);
 
     const daysUntil = getDaysUntilDeadline(goal.end_date);
     const isUrgent = daysUntil !== null && daysUntil < 7;
@@ -732,9 +843,9 @@ function GoalsAndTasks() {
               </span>
               {evaluationMeta && <span className="meta-text highlight">{evaluationMeta}</span>}
             </div>
-            {participantsInfo.length > 0 && (
+            {orderedParticipants.length > 0 && (
               <div className="goal-participants">
-                {participantsInfo.map((participant) => {
+                {orderedParticipants.map((participant) => {
                   const isSelfParticipant = Number(participant.employee) === Number(employee?.id);
                   const chipClasses = ['participant-chip'];
                   if (participant.is_owner) chipClasses.push('owner');
@@ -986,24 +1097,102 @@ function GoalsAndTasks() {
             {canAssign && (
               <label className="form-field span-2">
                 <span>Участники цели *</span>
-                <select
-                  name="participants"
-                  multiple
-                  value={goalFormData.participants}
-                  onChange={handleGoalFormChange}
-                  required
-                  disabled={savingGoal || employees.length === 0}
-                  size={Math.min(6, Math.max(employees.length, 3))}
-                >
-                  {employees.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.full_name || item.username}
-                      {item.department_name ? ` • ${item.department_name}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="participant-picker">
+                  <div className="selected-participants">
+                    {selectedParticipants.length === 0 ? (
+                      <div className="picker-empty">
+                        <p>Пока никого не выбрали.</p>
+                        {employee && (
+                          <button
+                            type="button"
+                            className="btn inline"
+                            onClick={() => handleAddParticipant(employee.id)}
+                            disabled={savingGoal}
+                          >
+                            Добавить себя
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      selectedParticipants.map((participant, index) => (
+                        <div
+                          key={participant.id}
+                          className={`selected-chip ${index === 0 ? 'owner' : ''}`}
+                        >
+                          <div className="chip-main">
+                            <strong>{participant.full_name || participant.username}</strong>
+                            {index === 0 && <span className="chip-owner-tag">Владелец цели</span>}
+                            <span>
+                              {participant.position_name || participant.position_title || '—'}
+                              {participant.department_name ? ` • ${participant.department_name}` : ''}
+                            </span>
+                          </div>
+                          <div className="chip-actions">
+                            {index > 0 && (
+                              <button
+                                type="button"
+                                className="chip-action"
+                                onClick={() => handlePromoteParticipant(participant.id)}
+                                disabled={savingGoal}
+                              >
+                                Сделать владельцем
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="chip-action danger"
+                              onClick={() => handleRemoveParticipant(participant.id)}
+                              disabled={savingGoal}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="participant-picker-controls">
+                    <div className="input-with-icon compact">
+                      <FiSearch size={14} />
+                      <input
+                        type="search"
+                        placeholder="Найти сотрудника по имени, должности или отделу"
+                        value={participantSearch}
+                        onChange={(event) => setParticipantSearch(event.target.value)}
+                        disabled={savingGoal}
+                      />
+                    </div>
+                    <div className="participant-candidates">
+                      {employees.length === 0 ? (
+                        <div className="picker-empty muted">Нет сотрудников для выбора.</div>
+                      ) : participantCandidates.length === 0 ? (
+                        <div className="picker-empty muted">Совпадений не найдено.</div>
+                      ) : (
+                        participantCandidates.map((candidate) => (
+                          <button
+                            key={candidate.id}
+                            type="button"
+                            className="candidate-item"
+                            onClick={() => handleAddParticipant(candidate.id)}
+                            disabled={savingGoal}
+                          >
+                            <div className="candidate-info">
+                              <strong>{candidate.full_name || candidate.username}</strong>
+                              <span>
+                                {candidate.position_name || candidate.position_title || '—'}
+                                {candidate.department_name ? ` • ${candidate.department_name}` : ''}
+                              </span>
+                            </div>
+                            <span className="candidate-action">Добавить</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
                 <small className="form-hint">
-                  Первый выбранный специалист станет владельцем цели. Удерживайте Ctrl/Cmd для множественного выбора.
+                  Первый в списке — владелец цели. Используйте «Сделать владельцем», чтобы назначить ответственного.
                 </small>
               </label>
             )}

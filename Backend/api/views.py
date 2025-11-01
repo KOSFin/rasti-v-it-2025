@@ -74,6 +74,19 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(team, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def colleagues(self, request):
+        employee = self._current_employee()
+        if not employee:
+            return Response([], status=status.HTTP_200_OK)
+
+        colleagues = Employee.objects.select_related('user', 'department', 'position').filter(
+            department=employee.department
+        ).exclude(pk=employee.pk).order_by('user__last_name', 'user__first_name')
+
+        serializer = self.get_serializer(colleagues, many=True)
+        return Response(serializer.data)
+
     def perform_destroy(self, instance):
         user = instance.user
         instance.delete()
@@ -352,6 +365,8 @@ class GoalViewSet(viewsets.ModelViewSet):
                 is_owner=participant == primary_employee
             )
 
+        goal.refresh_from_db()
+
     def perform_update(self, serializer):
         goal = self.get_object()
         user = self.request.user
@@ -399,6 +414,8 @@ class GoalViewSet(viewsets.ModelViewSet):
                         employee=participant,
                         is_owner=participant == primary_employee
                     )
+
+        goal.refresh_from_db()
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
