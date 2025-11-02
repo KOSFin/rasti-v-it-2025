@@ -11,6 +11,8 @@
 **Система объективной оценки и адаптации персонала**
 
 </div>
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/99589fe2-8eee-464c-a1de-55b3945e00ab" />
+
 
 ---
 
