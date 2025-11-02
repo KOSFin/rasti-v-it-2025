@@ -72,10 +72,6 @@
   pointer-events: none;
 }
 
-.goal-header:hover::before {
-  background: var(--bg-hover);
-}
-
 .goal-header:active::before {
   background: var(--surface-elevated);
 }
