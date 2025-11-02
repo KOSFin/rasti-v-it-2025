@@ -26,12 +26,12 @@
 .dashboard-error {
   padding: 14px 18px;
   border-radius: 12px;
-  background: rgba(244, 67, 54, 0.12);
+  background: var(--danger-surface);
   color: var(--color-error);
 }
 
 .dashboard-error.subtle {
-  background: rgba(255, 152, 0, 0.12);
+  background: var(--status-warning-bg);
   color: var(--color-warning);
 }
 
@@ -41,8 +41,8 @@
   gap: 20px;
   padding: 24px 28px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.18), rgba(255, 107, 53, 0.06));
-  border: 1px solid rgba(255, 107, 53, 0.25);
+  background: var(--hero-gradient);
+  border: 1px solid var(--hero-border);
   box-shadow: var(--shadow-md);
 }
 
@@ -87,7 +87,7 @@
 }
 
 .filter:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--surface-muted);
 }
 
 .filter.active {
@@ -161,8 +161,8 @@
 }
 
 .summary-card.highlight {
-  border-color: rgba(76, 175, 80, 0.35);
-  background: rgba(76, 175, 80, 0.08);
+  border-color: rgba(76, 175, 80, 0.32);
+  background: var(--success-surface);
 }
 
 .summary-card h3 {
@@ -243,22 +243,22 @@
 
 .insight-card.zone-green {
   border-color: rgba(76, 175, 80, 0.35);
-  background: rgba(76, 175, 80, 0.12);
+  background: var(--success-surface);
 }
 
 .insight-card.zone-yellow {
-  border-color: rgba(255, 179, 0, 0.35);
-  background: rgba(255, 179, 0, 0.12);
+  border-color: rgba(255, 152, 0, 0.38);
+  background: var(--status-warning-bg);
 }
 
 .insight-card.zone-red {
-  border-color: rgba(244, 67, 54, 0.35);
-  background: rgba(244, 67, 54, 0.12);
+  border-color: rgba(244, 67, 54, 0.4);
+  background: var(--status-danger-bg);
 }
 
 .insight-card.zone-blue {
-  border-color: rgba(33, 150, 243, 0.35);
-  background: rgba(33, 150, 243, 0.12);
+  border-color: rgba(33, 150, 243, 0.32);
+  background: var(--info-surface);
 }
 
 .insight-card.zone-neutral {
@@ -311,7 +311,7 @@
 }
 
 .category-card {
-  background: var(--bg-tertiary);
+  background: var(--surface-elevated);
   border-radius: 18px;
   padding: 16px;
   display: flex;
@@ -342,12 +342,12 @@
 }
 
 .tag.accent {
-  background: rgba(255, 107, 53, 0.18);
+  background: var(--accent-overlay);
   color: var(--color-accent);
 }
 
 .tag.soft {
-  background: rgba(76, 175, 80, 0.12);
+  background: var(--success-overlay);
   color: var(--color-success);
 }
 

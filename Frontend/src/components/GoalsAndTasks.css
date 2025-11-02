@@ -9,45 +9,94 @@
 .goal-item {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
 }
 
+.goal-item:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.goal-item.expanded {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-accent);
+}
+
 .goal-item.completed {
-  opacity: 0.7;
-  background: var(--bg-secondary);
+  opacity: 0.65;
+  background: var(--surface-elevated);
+}
+
+.goal-item.completed:hover {
+  opacity: 0.8;
+  transform: translateY(0);
 }
 
 .goal-item.awaiting {
   border-left: 4px solid var(--color-accent);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 0 1px var(--color-accent), var(--shadow-md);
+  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    box-shadow: 0 0 0 1px var(--color-accent), var(--shadow-md);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--color-accent), 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .goal-header {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1rem;
+  padding: 1.25rem;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
+  user-select: none;
+  position: relative;
 }
 
-.goal-header:hover {
+.goal-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  transition: background 0.2s ease;
+  pointer-events: none;
+}
+
+.goal-header:hover::before {
   background: var(--bg-hover);
+}
+
+.goal-header:active::before {
+  background: var(--surface-elevated);
 }
 
 .expand-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.4rem;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease, color 0.2s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+  pointer-events: none;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.goal-item.expanded .expand-btn {
+  transform: rotate(90deg);
 }
 
 .expand-btn:hover {

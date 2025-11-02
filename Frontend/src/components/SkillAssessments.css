@@ -1,10 +1,48 @@
-.skill-assessment-table tbody tr.clickable {
-  cursor: pointer;
+.skill-assessment-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.skill-assessment-table thead {
+  background: var(--surface-elevated);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.skill-assessment-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.skill-assessment-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.skill-assessment-table tbody tr {
   transition: background-color 0.2s ease;
 }
 
+.skill-assessment-table tbody tr.clickable {
+  cursor: pointer;
+}
+
 .skill-assessment-table tbody tr.clickable:hover {
-  background-color: var(--bg-hover);
+  background: var(--bg-hover);
+}
+
+.skill-assessment-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .skill-assessment-table .feedback-cell {
@@ -15,6 +53,30 @@
   white-space: nowrap;
 }
 
+.skill-assessment-table .score-cell {
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.skill-assessment-table .status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.skill-assessment-table .status-badge.pending {
+  background: rgba(255, 152, 0, 0.15);
+  color: var(--color-warning);
+}
+
+.skill-assessment-table .status-badge.completed {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--color-success);
+}
+
 .reputation-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -23,13 +85,14 @@
 }
 
 .reputation-overview {
-  background-color: var(--bg-tertiary);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .reputation-overview header {
@@ -42,14 +105,46 @@
 .reputation-overview p {
   color: var(--text-secondary);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.reputation-overview .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.reputation-overview .stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface-elevated);
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+}
+
+.reputation-overview .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.reputation-overview .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .reputation-chart {
-  background-color: var(--bg-tertiary);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: var(--shadow-md);
 }
 
 .badge {
@@ -58,11 +153,31 @@
   justify-content: center;
   min-width: 48px;
   height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background-color: var(--color-accent);
-  color: var(--bg-primary);
+  padding: 0 14px;
+  border-radius: 16px;
+  background: var(--color-accent);
+  color: #ffffff;
   font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.badge.success {
+  background: var(--color-success);
+}
+
+.badge.warning {
+  background: var(--color-warning);
+}
+
+.badge.error {
+  background: var(--color-error);
 }
 
 .manager-queue-table td {
@@ -72,28 +187,59 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.45);
+  background: var(--modal-backdrop);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
-  background-color: var(--bg-secondary);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  box-shadow: var(--shadow-xl);
   width: min(520px, 95vw);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .modal-header,
 .modal-footer {
-  padding: 20px;
+  padding: 24px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .modal-footer {
@@ -102,23 +248,45 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  background: var(--surface-elevated);
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  overflow-y: auto;
 }
 
 .modal-body textarea {
   width: 100%;
   resize: vertical;
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modal-body textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--accent-overlay);
 }
 
 .modal-error {
   color: var(--color-error);
   font-size: 13px;
+  padding: 10px 14px;
+  background: rgba(244, 67, 54, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid var(--color-error);
 }
 
 @media (max-width: 960px) {

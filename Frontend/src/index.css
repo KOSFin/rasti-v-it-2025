@@ -5,6 +5,9 @@
   --bg-secondary: #242424;
   --bg-tertiary: #2d2d2d;
   --bg-hover: #333333;
+  --surface-elevated: rgba(255, 255, 255, 0.04);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  --surface-contrast: rgba(0, 0, 0, 0.55);
   
   /* Текст */
   --text-primary: #ffffff;
@@ -19,12 +22,17 @@
   /* Границы */
   --border-color: #3d3d3d;
   --border-light: #4d4d4d;
+  --border-strong: rgba(255, 255, 255, 0.24);
   
   /* Состояния */
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
   --color-info: #2196f3;
+  --status-success-bg: rgba(76, 175, 80, 0.18);
+  --status-warning-bg: rgba(255, 152, 0, 0.2);
+  --status-danger-bg: rgba(244, 67, 54, 0.24);
+  --status-muted-bg: rgba(255, 255, 255, 0.08);
   
   /* Тени */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -38,6 +46,20 @@
   --muted-overlay: rgba(255, 255, 255, 0.04);
   --accent-overlay: rgba(255, 107, 53, 0.12);
   --success-overlay: rgba(76, 175, 80, 0.12);
+  --hero-gradient: linear-gradient(135deg, rgba(255, 107, 53, 0.28), rgba(255, 107, 53, 0.08));
+  --hero-border: rgba(255, 107, 53, 0.32);
+  --table-header-bg: rgba(255, 255, 255, 0.05);
+  --table-row-hover: rgba(255, 255, 255, 0.08);
+  --tag-bg: rgba(255, 255, 255, 0.06);
+  --badge-bg: rgba(255, 255, 255, 0.08);
+  --badge-text: var(--text-secondary);
+  --modal-backdrop: rgba(10, 12, 20, 0.7);
+  --chart-grid: rgba(255, 255, 255, 0.18);
+  --chart-axis: #cbd5f5;
+  --neutral-outline: rgba(255, 255, 255, 0.12);
+  --danger-surface: rgba(244, 67, 54, 0.18);
+  --success-surface: rgba(76, 175, 80, 0.18);
+  --info-surface: rgba(33, 150, 243, 0.18);
 }
 
 :root[data-theme="light"] {
@@ -46,6 +68,9 @@
   --bg-secondary: #f5f5f5;
   --bg-tertiary: #eeeeee;
   --bg-hover: #e8e8e8;
+  --surface-elevated: #ffffff;
+  --surface-muted: rgba(0, 0, 0, 0.04);
+  --surface-contrast: rgba(255, 255, 255, 0.86);
   
   /* Текст */
   --text-primary: #212121;
@@ -60,12 +85,17 @@
   /* Границы */
   --border-color: #e0e0e0;
   --border-light: #eeeeee;
+  --border-strong: rgba(33, 33, 33, 0.12);
   
   /* Состояния */
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
   --color-info: #2196f3;
+  --status-success-bg: rgba(76, 175, 80, 0.14);
+  --status-warning-bg: rgba(255, 152, 0, 0.14);
+  --status-danger-bg: rgba(244, 67, 54, 0.14);
+  --status-muted-bg: rgba(33, 33, 33, 0.06);
   
   /* Тени */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -79,6 +109,20 @@
   --muted-overlay: rgba(0, 0, 0, 0.04);
   --accent-overlay: rgba(255, 107, 53, 0.08);
   --success-overlay: rgba(76, 175, 80, 0.08);
+  --hero-gradient: linear-gradient(135deg, rgba(255, 107, 53, 0.16), rgba(255, 107, 53, 0.05));
+  --hero-border: rgba(255, 107, 53, 0.2);
+  --table-header-bg: rgba(33, 33, 33, 0.05);
+  --table-row-hover: rgba(33, 33, 33, 0.04);
+  --tag-bg: rgba(0, 0, 0, 0.05);
+  --badge-bg: rgba(0, 0, 0, 0.05);
+  --badge-text: var(--text-secondary);
+  --modal-backdrop: rgba(15, 18, 25, 0.55);
+  --chart-grid: rgba(15, 23, 42, 0.12);
+  --chart-axis: #4b5563;
+  --neutral-outline: rgba(33, 33, 33, 0.1);
+  --danger-surface: rgba(244, 67, 54, 0.12);
+  --success-surface: rgba(76, 175, 80, 0.12);
+  --info-surface: rgba(33, 150, 243, 0.12);
 }
 
 /* Сброс стилей */

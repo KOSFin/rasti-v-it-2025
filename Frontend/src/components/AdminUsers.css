@@ -72,12 +72,12 @@
 }
 
 .page-banner.error {
-  background: rgba(244, 67, 54, 0.14);
+  background: var(--danger-surface);
   color: var(--color-error);
 }
 
 .page-banner.success {
-  background: rgba(76, 175, 80, 0.14);
+  background: var(--success-surface);
   color: var(--color-success);
   flex-wrap: wrap;
 }
@@ -310,12 +310,12 @@
 }
 
 .status-on {
-  background: rgba(76, 175, 80, 0.18);
+  background: var(--status-success-bg);
   color: var(--color-success);
 }
 
 .status-off {
-  background: rgba(158, 158, 158, 0.18);
+  background: var(--status-muted-bg);
   color: var(--text-tertiary);
 }
 
@@ -333,8 +333,8 @@
   margin-top: 24px;
   padding: 20px;
   border-radius: 16px;
-  border: 1px dashed var(--border-color);
-  background: var(--bg-secondary);
+  border: 1px dashed var(--neutral-outline);
+  background: var(--surface-elevated);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -367,6 +367,30 @@
 .credentials-hint {
   font-size: 13px;
   color: var(--text-tertiary);
+}
+
+.modal.large {
+  max-width: 960px;
+}
+
+.modal.large .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 1.5rem;
+}
+
+.modal.large .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.modal.large .form-actions,
+.modal.large .modal-footer {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 @media (max-width: 960px) {

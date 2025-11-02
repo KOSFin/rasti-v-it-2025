@@ -34,9 +34,9 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-hover) 100%);
+  color: #fff;
+  border: 0;
   padding: 12px 24px;
   border-radius: 5px;
   cursor: pointer;
@@ -46,7 +46,7 @@
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .btn-secondary {
@@ -66,8 +66,8 @@
 }
 
 .btn-danger {
-  background-color: #f44336;
-  color: white;
+  background-color: var(--color-error);
+  color: #fff;
   border: none;
   padding: 8px 16px;
   border-radius: 5px;
@@ -102,7 +102,7 @@
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: #555;
+  color: var(--text-secondary);
   font-weight: 500;
   font-size: 14px;
 }
@@ -112,19 +112,21 @@
 .form-group textarea {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   font-size: 14px;
   font-family: inherit;
   transition: border-color 0.3s;
   box-sizing: border-box;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-accent);
 }
 
 .form-row {
@@ -160,8 +162,8 @@
 }
 
 .item-card.completed-task {
-  background: #e8f5e9;
-  border-color: #4caf50;
+  background: var(--success-surface);
+  border-color: rgba(76, 175, 80, 0.45);
   opacity: 0.85;
 }
 
@@ -174,7 +176,7 @@
 
 .item-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 18px;
   flex: 1;
 }
@@ -188,29 +190,29 @@
 }
 
 .badge-strategic {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: var(--info-surface);
+  color: var(--color-info);
 }
 
 .badge-tactical {
-  background-color: #fff3e0;
-  color: #f57c00;
+  background-color: var(--accent-overlay);
+  color: var(--color-accent);
 }
 
 .badge-personal {
-  background-color: #f3e5f5;
-  color: #7b1fa2;
+  background-color: var(--success-overlay);
+  color: var(--color-success);
 }
 
 .item-description {
-  color: #666;
+  color: var(--text-secondary);
   margin: 0 0 15px 0;
   font-size: 14px;
   line-height: 1.6;
 }
 
 .item-meta {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 13px;
   margin-bottom: 15px;
   line-height: 1.5;
@@ -250,7 +252,7 @@
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .empty-state p {
@@ -264,7 +266,7 @@
   align-items: center;
   min-height: 100vh;
   font-size: 20px;
-  color: #667eea;
+  color: var(--color-accent);
 }
 
 /* Таблицы */
@@ -280,6 +282,9 @@ table {
   min-width: 600px; /* Минимальная ширина для прокрутки */
 }
 
+.table-container table,
+.table-container th,
+.table-container td,
 table th,
 table td {
   padding: 12px 16px;
@@ -289,13 +294,15 @@ table td {
 }
 
 table th {
-  background-color: var(--bg-secondary);
+  background-color: var(--table-header-bg);
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
   position: sticky;
   top: 0;
   z-index: 10;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 table td {
@@ -304,7 +311,7 @@ table td {
 }
 
 table tr:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--table-row-hover);
 }
 
 .insights-grid {
@@ -328,45 +335,45 @@ table tr:hover {
   font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #6b7280;
+  color: var(--text-tertiary);
 }
 
 .insight-number {
   font-size: 28px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .insight-number.warning {
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .insight-number.accent {
-  color: #1d4ed8;
+  color: var(--color-info);
 }
 
 .insight-number.success {
-  color: #047857;
+  color: var(--color-success);
 }
 
 .insight-card.zone-blue {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: var(--info-surface);
+  background: var(--info-surface);
 }
 
 .insight-card.zone-green {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  border-color: rgba(76, 175, 80, 0.35);
+  background: var(--success-surface);
 }
 
 .insight-card.zone-yellow {
-  border-color: #fef08a;
-  background: #fefce8;
+  border-color: rgba(255, 152, 0, 0.4);
+  background: var(--status-warning-bg);
 }
 
 .insight-card.zone-red {
-  border-color: #fecaca;
-  background: #fef2f2;
+  border-color: rgba(244, 67, 54, 0.4);
+  background: var(--status-danger-bg);
 }
 
 /* Чекбоксы и радиокнопки */
@@ -408,7 +415,7 @@ table tr:hover {
 }
 
 .panel-header span {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -425,7 +432,7 @@ table tr:hover {
 
 .list li {
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -439,13 +446,13 @@ table tr:hover {
 .list li strong {
   display: block;
   margin-bottom: 4px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .list li span {
   display: block;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .tag-group {
@@ -458,29 +465,29 @@ table tr:hover {
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
-  background: #f3f4f6;
-  color: #555;
+  background: var(--tag-bg);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .tag.accent {
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: var(--accent-overlay);
+  color: var(--color-accent);
 }
 
 .tag.success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--success-overlay);
+  color: var(--color-success);
 }
 
 .tag.warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--status-warning-bg);
+  color: var(--color-warning);
 }
 
 .tag.muted {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--status-muted-bg);
+  color: var(--text-tertiary);
 }
 
 .status-table {
@@ -507,38 +514,38 @@ table tr:hover {
 }
 
 .tag.status-completed {
-  background: rgba(76, 175, 80, 0.18);
+  background: var(--status-success-bg);
   color: var(--color-success);
 }
 
 .tag.status-open,
 .tag.status-due_today {
-  background: rgba(33, 150, 243, 0.16);
+  background: var(--info-surface);
   color: var(--color-info);
 }
 
 .tag.status-overdue {
-  background: rgba(244, 67, 54, 0.16);
+  background: var(--status-danger-bg);
   color: var(--color-error);
 }
 
 .tag.status-scheduled {
-  background: rgba(96, 165, 250, 0.14);
+  background: var(--info-surface);
   color: var(--color-info);
 }
 
 .tag.status-expired {
-  background: rgba(255, 152, 0, 0.18);
+  background: var(--status-warning-bg);
   color: var(--color-warning);
 }
 
 .tag.status-awaiting_feedback {
-  background: rgba(255, 193, 7, 0.2);
+  background: var(--status-warning-bg);
   color: var(--color-warning);
 }
 
 .tag.status-missed {
-  background: rgba(239, 68, 68, 0.22);
+  background: var(--status-danger-bg);
   color: var(--color-error);
 }
 
@@ -549,7 +556,7 @@ table tr:hover {
 }
 
 .summary-card {
-  background: var(--bg-secondary);
+  background: var(--card-bg);
   border-radius: 16px;
   padding: 18px;
   border: 1px solid var(--border-color);
@@ -560,8 +567,8 @@ table tr:hover {
 }
 
 .summary-card.highlight {
-  border-color: rgba(76, 175, 80, 0.28);
-  background: rgba(76, 175, 80, 0.12);
+  border-color: rgba(76, 175, 80, 0.32);
+  background: var(--success-surface);
 }
 
 .summary-card h3 {
@@ -569,7 +576,7 @@ table tr:hover {
   font-size: 13px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .summary-main {
@@ -580,24 +587,13 @@ table tr:hover {
 
 .summary-meta {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
-.summary-card .zone-green {
-  color: #047857;
-}
-
-.summary-card .zone-yellow {
-  color: #b45309;
-}
-
-.summary-card .zone-red {
-  color: #b91c1c;
-}
-
-.summary-card .zone-blue {
-  color: #1d4ed8;
-}
+.summary-card .zone-green { color: var(--color-success); }
+.summary-card .zone-yellow { color: var(--color-warning); }
+.summary-card .zone-red { color: var(--color-error); }
+.summary-card .zone-blue { color: var(--color-info); }
 
 /* small preview of tasks in lists (used on Feedback360 page) */
 .tasks-preview {
@@ -640,7 +636,7 @@ table tr:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.45);
+  background: var(--modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -217,6 +217,299 @@
   color: var(--color-warning);
 }
 
+/* Analytics row for charts */
+.analytics-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 18px;
+}
+
+/* Progress pills for type breakdown */
+.metrics-list.dense li {
+  padding: 10px 12px;
+  gap: 12px;
+}
+
+.progress-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 120px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  padding: 0 10px;
+}
+
+.progress-pill__bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--color-success), var(--color-info));
+  border-radius: 14px;
+  transition: width 0.3s ease;
+}
+
+.progress-pill span {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Performance table */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card-bg);
+}
+
+.table thead {
+  background: var(--surface-elevated);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-name strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.table-name span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-name .muted {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.metric-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-stack span {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.metric-stack .muted {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Progress bars in table */
+.progress-bar {
+  position: relative;
+  width: 100px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.progress-bar__value {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--color-info);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-bar__value.success {
+  background: var(--color-success);
+}
+
+/* Risk chips */
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.risk-chip.risk-low {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--color-success);
+}
+
+.risk-chip.risk-mid {
+  background: rgba(255, 152, 0, 0.15);
+  color: var(--color-warning);
+}
+
+.risk-chip.risk-high {
+  background: rgba(244, 67, 54, 0.15);
+  color: var(--color-error);
+}
+
+/* Employee report modal */
+.employee-report {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.employee-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-light);
+}
+
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.kpi-card strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.kpi-card .muted {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Comparison card */
+.comparison-card {
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.comparison-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin: 0 0 16px 0;
+}
+
+.comparison-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comparison-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+}
+
+.comparison-list li > span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.comparison-list li > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.comparison-list strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comparison-list small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.panel-placeholder {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+@media (max-width: 1200px) {
+  .analytics-row {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
 @media (max-width: 960px) {
   .page-header {
     flex-direction: column;
@@ -229,5 +522,14 @@
 
   .grid.panels {
     grid-template-columns: 1fr;
+  }
+
+  .table-wrapper {
+    font-size: 12px;
+  }
+
+  .table th,
+  .table td {
+    padding: 10px 12px;
   }
 }
