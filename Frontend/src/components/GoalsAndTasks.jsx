@@ -1295,8 +1295,9 @@ function GoalsAndTasks() {
                 name="task_link"
                 value={goalFormData.task_link}
                 onChange={handleGoalFormChange}
-                placeholder="https:
+                placeholder="https://example.com"
               />
+              <small className="form-hint">Опционально, укажите ссылку на материалы или задачу (начинается с https://)</small>
             </label>
 
             {canAssign && ownerParticipantId && ownerParticipantId !== String(employee?.id) && (
