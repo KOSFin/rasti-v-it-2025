@@ -1459,6 +1459,10 @@ def skill_review_overview(employer: Employer) -> Dict:
     """Return combined timeline and summary metrics for an employer's skill reviews."""
 
     ensure_default_skill_periods()
+    
+    # Ensure initial self-review exists for period "Start"
+    ensure_initial_self_review(employer)
+    
     today = timezone.now().date()
     base_date = _activation_start_date(employer) or today
 
