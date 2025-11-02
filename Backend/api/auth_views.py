@@ -10,6 +10,7 @@ from django.utils import timezone
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.settings import api_settings
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 try:
     from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 except ModuleNotFoundError:
@@ -25,6 +26,27 @@ from .serializers import (
 )
 from performance.services import ensure_initial_self_review, sync_employer_from_employee
 
+@extend_schema(
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string'},
+                'password': {'type': 'string'},
+                'email': {'type': 'string', 'format': 'email'},
+                'first_name': {'type': 'string'},
+                'last_name': {'type': 'string'},
+                'department': {'type': 'integer'},
+                'hire_date': {'type': 'string', 'format': 'date'},
+                'position': {'type': 'integer'},
+                'role': {'type': 'string', 'enum': ['employee', 'manager', 'admin', 'business_partner']},
+            },
+            'required': ['username', 'password'],
+        }
+    },
+    responses={201: UserSerializer},
+    tags=['Authentication']
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -142,6 +164,30 @@ def register(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@extend_schema(
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string'},
+                'password': {'type': 'string'},
+            },
+            'required': ['username', 'password'],
+        }
+    },
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'refresh': {'type': 'string'},
+                'access': {'type': 'string'},
+                'user': {'type': 'object'},
+                'employee': {'type': 'object'},
+            }
+        }
+    },
+    tags=['Authentication']
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -199,6 +245,18 @@ def login(request):
 from django.db import IntegrityError
 
 
+@extend_schema(
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'refresh': {'type': 'string'},
+            },
+        }
+    },
+    responses={200: {'type': 'object', 'properties': {'message': {'type': 'string'}}}},
+    tags=['Authentication']
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
@@ -225,6 +283,10 @@ def logout(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(
+    responses={200: {'type': 'object', 'properties': {'user': {'type': 'object'}, 'employee': {'type': 'object'}}}},
+    tags=['Authentication']
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):

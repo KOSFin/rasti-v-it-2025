@@ -6,9 +6,18 @@ from rest_framework.exceptions import ValidationError
 from django.db.models import Q, Avg, Count
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import *
 from .serializers import *
 
+@extend_schema_view(
+    list=extend_schema(summary='Список отделов', tags=['Departments']),
+    create=extend_schema(summary='Создать отдел', tags=['Departments']),
+    retrieve=extend_schema(summary='Получить отдел', tags=['Departments']),
+    update=extend_schema(summary='Обновить отдел', tags=['Departments']),
+    partial_update=extend_schema(summary='Частично обновить отдел', tags=['Departments']),
+    destroy=extend_schema(summary='Удалить отдел', tags=['Departments']),
+)
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
@@ -21,6 +30,14 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         return super().get_permissions()
 
+@extend_schema_view(
+    list=extend_schema(summary='Список сотрудников', tags=['Employees']),
+    create=extend_schema(summary='Создать сотрудника', tags=['Employees']),
+    retrieve=extend_schema(summary='Получить сотрудника', tags=['Employees']),
+    update=extend_schema(summary='Обновить сотрудника', tags=['Employees']),
+    partial_update=extend_schema(summary='Частично обновить сотрудника', tags=['Employees']),
+    destroy=extend_schema(summary='Удалить сотрудника', tags=['Employees']),
+)
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.select_related('user', 'department', 'position').all()
     serializer_class = EmployeeSerializer
@@ -199,6 +216,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             'employee_id': employee.id,
         })
 
+@extend_schema_view(
+    list=extend_schema(summary='Список целей', tags=['Goals']),
+    create=extend_schema(summary='Создать цель', tags=['Goals']),
+    retrieve=extend_schema(summary='Получить цель', tags=['Goals']),
+    update=extend_schema(summary='Обновить цель', tags=['Goals']),
+    partial_update=extend_schema(summary='Частично обновить цель', tags=['Goals']),
+    destroy=extend_schema(summary='Удалить цель', tags=['Goals']),
+)
 class GoalViewSet(viewsets.ModelViewSet):
     serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
