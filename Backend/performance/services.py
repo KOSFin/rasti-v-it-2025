@@ -1556,7 +1556,7 @@ def skill_review_overview(employer: Employer) -> Dict:
 
         days_past_due = (today - due_date).days if today > due_date else 0
         overdue_flag = today > due_date
-        miss_deadline = available_from_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
+        miss_deadline = due_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
 
         feedback_obj = getattr(log, "feedback", None) if log else None
         if feedback_obj:
