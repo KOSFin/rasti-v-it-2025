@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Avg, F, Q
+from django.db.models import Avg, Q
 from django.utils import timezone
 
 from .models import (
@@ -19,181 +19,127 @@ from .models import (
     ReviewLog,
     ReviewPeriod,
     ReviewQuestion,
-    timeline: List[Dict] = []
-    tests_total = 0
-    tests_completed = 0
-    tests_due = 0
-    tests_due_completed = 0
-    tests_completed_by_employee = 0
-    overdue_entries = 0
-    waiting_feedback_entries = 0
-    punctuality_penalty = 0.0
-    overdue_delay_days = 0
-    waiting_feedback_max = 0
-    active_review: Optional[Dict] = None
-    next_review: Optional[Dict] = None
+    ReviewSchedule,
+    ReviewTask,
+    SiteNotification,
+    SkillCategory,
+    SkillQuestion,
+    SkillReviewFeedback,
+    TaskReviewAnswer,
+    TeamRelation,
+    default_token_expiry,
+)
 
-    for period in periods:
-        log = logs_by_period.get(period.id)
-        metadata = log.metadata or {} if log else {}
-        due_date = _period_due_date(employer, period, metadata)
+DEFAULT_SKILL_PERIODS: Tuple[Tuple[int, str], ...] = (
+    (0, "Старт"),
+    (1, "1 месяц"),
+    (3, "3 месяца"),
+    (6, "6 месяцев"),
+    (12, "12 месяцев"),
+    (24, "24 месяца"),
+)
 
-        stats = per_period_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
-        average_score = _weighted_average(stats["sum"], stats["weight"])
+if TYPE_CHECKING:
+    from api.models import Employee
 
-        status = "scheduled"
-        token = None
-        expires_at = None
-        completed_at = None
-        feedback_payload = None
-        submitted_at_iso = metadata.get("submitted_at")
-        awaiting_feedback_since = metadata.get("awaiting_feedback_since")
-        waiting_days = 0
-        available_from_iso = metadata.get("available_since") or due_date.isoformat()
-        days_past_due = (today - due_date).days if today > due_date else 0
-        overdue_threshold = due_date + timedelta(days=30)
-        overdue_flag = today > overdue_threshold
 
-        feedback_obj = getattr(log, "feedback", None) if log else None
-        if feedback_obj:
-            shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
-            feedback_payload = {
-                "author": feedback_obj.author.fio,
-                "message": feedback_obj.message,
-                "shared_at": shared_ts.isoformat() if shared_ts else None,
-            }
+class ServiceError(Exception):
+    """Domain-level exception converted to API responses in views."""
 
-        if log:
-            if log.status == ReviewLog.STATUS_COMPLETED:
-                status = "completed"
-                completion_source = None
-                if feedback_obj and feedback_obj.shared_at:
-                    completion_source = feedback_obj.shared_at
-                else:
-                    completion_source = _log_completed_at(log)
-                completed_at = completion_source.isoformat() if completion_source else submitted_at_iso
-                tests_completed_by_employee += 1
-            elif log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
-                status = "awaiting_feedback"
-                waiting_feedback_entries += 1
-                tests_completed_by_employee += 1
-                completed_at = submitted_at_iso
-                if awaiting_feedback_since:
-                    try:
-                        waiting_days = max(
-                            (today - datetime.fromisoformat(awaiting_feedback_since).date()).days,
-                            0,
-                        )
-                    except (TypeError, ValueError):
-                        waiting_days = 0
-                waiting_feedback_max = max(waiting_feedback_max, waiting_days)
-            elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
-                if today < due_date:
-                    status = "open"
-                elif today == due_date:
-                    status = "due_today"
-                else:
-                    status = "open"
-                if overdue_flag and today >= due_date:
-                    status = "overdue"
-                token = str(log.token)
-                expires_at = log.expires_at.isoformat()
-            elif log.status == ReviewLog.STATUS_EXPIRED:
-                status = "expired"
-            else:
-                status = log.status
-        else:
-            if today < due_date:
-                status = "scheduled"
-            elif today == due_date:
-                status = "due_today"
-            else:
-                status = "missed"
+    def __init__(self, message: str, *, code: str = "error", status: int = 400) -> None:
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.status = status
 
-        tests_total += 1
-        if status == "completed":
-            tests_completed += 1
+    def as_dict(self) -> Dict[str, object]:
+        return {"message": self.message, "code": self.code, "status": self.status}
 
-        if due_date <= today:
-            tests_due += 1
-            if status in {"completed", "awaiting_feedback"}:
-                tests_due_completed += 1
 
-        penalty = 0.0
-        overdue_delay = 0
-        if status == "overdue":
-            overdue_entries += 1
-            delay_days = max(days_past_due - 30, 0)
-            overdue_delay_days += delay_days
-            penalty = delay_days + 10
-            overdue_delay = delay_days
-        elif status == "missed":
-            penalty = 35
-        elif status == "expired":
-            penalty = 25
-        elif status == "awaiting_feedback" and waiting_days > 21:
-            penalty = (waiting_days - 21) * 0.5
+@dataclass
+class ReviewCycleResult:
+    created_self_tests: int = 0
+    created_peer_reviews: int = 0
+    notifications_created: int = 0
 
-        punctuality_penalty += penalty
-
-        can_start = token is not None and status in {"open", "due_today", "overdue"}
-
-        entry = {
-            "period_id": period.id,
-            "period_label": _period_label(period),
-            "month_offset": period.month_period,
-            "due_date": due_date.isoformat(),
-            "available_from": available_from_iso,
-            "status": status,
-            "score": average_score,
-            "weight_total": stats["weight"],
-            "token": token if can_start else None,
-            "can_start": can_start,
-            "expires_at": expires_at,
-            "completed_at": completed_at,
-            "submitted_at": submitted_at_iso,
-            "feedback": feedback_payload,
-            "metadata": metadata,
-            "days_past_due": days_past_due,
-            "waiting_days": waiting_days,
-            "overdue_delay": overdue_delay,
-            "reputation_penalty": penalty,
+    def as_dict(self) -> Dict[str, int]:
+        return {
+            "created_self_tests": self.created_self_tests,
+            "created_peer_reviews": self.created_peer_reviews,
+            "notifications_created": self.notifications_created,
         }
 
-        timeline.append(entry)
 
-        if can_start:
-            if not active_review or due_date < date.fromisoformat(active_review["due_date"]):
-                active_review = {
-                    "period_id": period.id,
-                    "period_label": entry["period_label"],
-                    "status": status,
-                    "token": entry["token"],
-                    "expires_at": expires_at,
-                    "due_date": entry["due_date"],
-                }
+def add_months(base: date, months: int) -> date:
+    """Return a new date shifted by ``months`` preserving day when possible."""
 
-        candidate_for_next = False
-        if status in {"scheduled", "open", "due_today"} and due_date >= today:
-            candidate_for_next = True
-        elif status == "overdue" and not next_review:
-            candidate_for_next = True
+    if months == 0:
+        return base
 
-        if candidate_for_next:
-            existing_due = date.fromisoformat(next_review["due_date"]) if next_review else None
-            if not existing_due or due_date < existing_due:
-                days_left = max((due_date - today).days, 0)
-                next_review = {
-                    "period_id": period.id,
-                    "period_label": entry["period_label"],
-                    "due_date": entry["due_date"],
-                    "days_left": days_left,
-                    "status": status,
-                }
+    year = base.year + (base.month - 1 + months) // 12
+    month = (base.month - 1 + months) % 12 + 1
+    day = min(base.day, monthrange(year, month)[1])
+    return date(year, month, day)
 
-    return list(
-        ReviewPeriod.objects.filter(id__in=ensured_ids).order_by("month_period")
-    )
+
+def ensure_default_skill_periods(
+    defaults: Iterable[Tuple[int, str]] = DEFAULT_SKILL_PERIODS,
+) -> List[ReviewPeriod]:
+    """Ensure baseline ``ReviewPeriod`` instances exist and return them ordered."""
+
+    ensured_ids: List[int] = []
+    for month_period, name in defaults:
+        period, created = ReviewPeriod.objects.get_or_create(
+            month_period=month_period,
+            defaults={"name": name, "is_active": True},
+        )
+        if not created and name and period.name != name:
+            period.name = name
+            period.save(update_fields=["name", "updated_at"])
+        if not period.is_active:
+            period.is_active = True
+            period.save(update_fields=["is_active", "updated_at"])
+        ensured_ids.append(period.id)
+    return list(ReviewPeriod.objects.filter(id__in=ensured_ids).order_by("month_period"))
+
+
+def _activation_start_date(employer: Employer) -> Optional[date]:
+    """Determine the reference start date for review timelines."""
+
+    if employer.activation_date:
+        return employer.activation_date
+    if employer.date_of_employment:
+        return employer.date_of_employment
+    return None
+
+
+def _period_due_date(
+    employer: Employer,
+    period: Optional[ReviewPeriod],
+    metadata: Optional[Dict],
+) -> date:
+    """Resolve the logical due date for the provided period."""
+
+    today = timezone.now().date()
+    metadata = metadata or {}
+
+    due_at_value = metadata.get("due_at") or metadata.get("due_date")
+    if isinstance(due_at_value, date):
+        return due_at_value
+    if isinstance(due_at_value, str):
+        try:
+            return date.fromisoformat(due_at_value)
+        except ValueError:
+            try:
+                return datetime.fromisoformat(due_at_value).date()
+            except ValueError:
+                pass
+
+    base_date = _activation_start_date(employer)
+    if period is None or base_date is None:
+        return today
+
+    return add_months(base_date, period.month_period)
 
 
 def months_between(start: date, end: date) -> int:
@@ -1515,7 +1461,7 @@ def skill_review_overview(employer: Employer) -> Dict:
             respondent=employer,
             context=ReviewLog.CONTEXT_SKILL,
         )
-        .select_related("period")
+        .select_related("period", "feedback", "feedback__author")
         .order_by("period__month_period", "-created_at")
     )
 
@@ -1545,19 +1491,18 @@ def skill_review_overview(employer: Employer) -> Dict:
     tests_due = 0
     tests_due_completed = 0
     overdue_entries = 0
+    waiting_feedback_entries = 0
+    waiting_feedback_max = 0
+    tests_completed_by_employee = 0
+    punctuality_penalty = 0.0
+    overdue_delay_days = 0
     active_review: Optional[Dict] = None
     next_review: Optional[Dict] = None
 
     for period in periods:
-        due_date = add_months(base_date, period.month_period)
         log = logs_by_period.get(period.id)
         metadata = log.metadata or {} if log else {}
-        due_at_metadata = metadata.get("due_at")
-        if due_at_metadata:
-            try:
-                due_date = date.fromisoformat(due_at_metadata)
-            except ValueError:
-                pass
+        due_date = _period_due_date(employer, period, metadata)
 
         stats = per_period_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
         average_score = _weighted_average(stats["sum"], stats["weight"])
@@ -1566,19 +1511,59 @@ def skill_review_overview(employer: Employer) -> Dict:
         token = None
         expires_at = None
         completed_at = None
+        feedback_payload = None
+        submitted_at_iso = metadata.get("submitted_at")
+        awaiting_feedback_since = metadata.get("awaiting_feedback_since")
+        waiting_days = 0
+        available_from_iso = metadata.get("available_since") or due_date.isoformat()
+        days_past_due = (today - due_date).days if today > due_date else 0
+        overdue_threshold = due_date + timedelta(days=30)
+        overdue_flag = today > overdue_threshold
+
+        feedback_obj = getattr(log, "feedback", None) if log else None
+        if feedback_obj:
+            shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
+            feedback_payload = {
+                "author": feedback_obj.author.fio,
+                "message": feedback_obj.message,
+                "shared_at": shared_ts.isoformat() if shared_ts else None,
+            }
 
         if log:
             if log.status == ReviewLog.STATUS_COMPLETED:
                 status = "completed"
-                completed_dt = _log_completed_at(log)
-                completed_at = completed_dt.isoformat() if completed_dt else None
+                completion_source: Optional[datetime] = None
+                if feedback_obj and feedback_obj.shared_at:
+                    completion_source = feedback_obj.shared_at
+                else:
+                    completion_source = _log_completed_at(log)
+                completed_at = (
+                    completion_source.isoformat() if completion_source else submitted_at_iso
+                )
+                tests_completed_by_employee += 1
+            elif log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
+                status = "awaiting_feedback"
+                waiting_feedback_entries += 1
+                tests_completed_by_employee += 1
+                completed_at = submitted_at_iso
+                if awaiting_feedback_since:
+                    try:
+                        waiting_days = max(
+                            (today - datetime.fromisoformat(awaiting_feedback_since).date()).days,
+                            0,
+                        )
+                    except (TypeError, ValueError):
+                        waiting_days = 0
+                waiting_feedback_max = max(waiting_feedback_max, waiting_days)
             elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
-                if due_date < today:
-                    status = "overdue"
-                elif due_date == today:
+                if today < due_date:
+                    status = "open"
+                elif today == due_date:
                     status = "due_today"
                 else:
                     status = "open"
+                if overdue_flag and today >= due_date:
+                    status = "overdue"
                 token = str(log.token)
                 expires_at = log.expires_at.isoformat()
             elif log.status == ReviewLog.STATUS_EXPIRED:
@@ -1586,56 +1571,90 @@ def skill_review_overview(employer: Employer) -> Dict:
             else:
                 status = log.status
         else:
-            if due_date < today:
-                status = "missed"
-            elif due_date == today:
+            if today < due_date:
+                status = "scheduled"
+            elif today == due_date:
                 status = "due_today"
+            else:
+                status = "missed"
 
         tests_total += 1
         if status == "completed":
             tests_completed += 1
+
         if due_date <= today:
             tests_due += 1
-            if status == "completed":
+            if status in {"completed", "awaiting_feedback"}:
                 tests_due_completed += 1
+
+        penalty = 0.0
+        overdue_delay = 0
         if status == "overdue":
             overdue_entries += 1
+            delay_days = max(days_past_due - 30, 0)
+            overdue_delay_days += delay_days
+            penalty = delay_days + 10
+            overdue_delay = delay_days
+        elif status == "missed":
+            penalty = 35
+        elif status == "expired":
+            penalty = 25
+        elif status == "awaiting_feedback" and waiting_days > 21:
+            penalty = (waiting_days - 21) * 0.5
+
+        punctuality_penalty += penalty
+
+        can_start = token is not None and status in {"open", "due_today", "overdue"}
 
         entry = {
             "period_id": period.id,
             "period_label": _period_label(period),
             "month_offset": period.month_period,
             "due_date": due_date.isoformat(),
+            "available_from": available_from_iso,
             "status": status,
             "score": average_score,
             "weight_total": stats["weight"],
-            "token": token,
+            "token": token if can_start else None,
+            "can_start": can_start,
             "expires_at": expires_at,
             "completed_at": completed_at,
+            "submitted_at": submitted_at_iso,
+            "feedback": feedback_payload,
             "metadata": metadata,
+            "days_past_due": days_past_due,
+            "waiting_days": waiting_days,
+            "overdue_delay": overdue_delay,
+            "reputation_penalty": penalty,
         }
 
         timeline.append(entry)
 
-        is_actionable = status in {"open", "due_today", "overdue"}
-        if is_actionable:
-            if not active_review or entry["due_date"] < active_review["due_date"]:
+        if can_start:
+            if not active_review or due_date < date.fromisoformat(active_review["due_date"]):
                 active_review = {
                     "period_id": period.id,
                     "period_label": entry["period_label"],
                     "status": status,
-                    "token": token,
+                    "token": entry["token"],
                     "expires_at": expires_at,
                     "due_date": entry["due_date"],
                 }
 
-        if status != "completed" and due_date >= today:
-            if not next_review or due_date < date.fromisoformat(next_review["due_date"]):
-                days_left = (due_date - today).days
+        candidate_for_next = False
+        if status in {"scheduled", "open", "due_today"} and due_date >= today:
+            candidate_for_next = True
+        elif status == "overdue" and not next_review:
+            candidate_for_next = True
+
+        if candidate_for_next:
+            existing_due = date.fromisoformat(next_review["due_date"]) if next_review else None
+            if not existing_due or due_date < existing_due:
+                days_left = max((due_date - today).days, 0)
                 next_review = {
                     "period_id": period.id,
                     "period_label": entry["period_label"],
-                    "due_date": due_date.isoformat(),
+                    "due_date": entry["due_date"],
                     "days_left": days_left,
                     "status": status,
                 }
