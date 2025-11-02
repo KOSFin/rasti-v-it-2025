@@ -832,11 +832,31 @@ function GoalsAndTasks() {
 
     return (
       <article key={goal.id} className={goalClasses.join(' ')}>
-        <header className="goal-header">
+        <header
+          className="goal-header"
+          onClick={(e) => {
+            // If the click originated from a button, link or an element with .icon-btn or .chip-action,
+            // do not toggle expansion (allow the element's handler to run).
+            const el = e.target;
+            if (
+              el.closest('button') ||
+              el.closest('a') ||
+              el.closest('.icon-btn') ||
+              el.closest('.chip-action') ||
+              el.closest('.task-checkbox')
+            ) {
+              return;
+            }
+            toggleGoalExpand(goal.id);
+          }}
+        >
           <button
             type="button"
             className="expand-btn"
-            onClick={() => toggleGoalExpand(goal.id)}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              toggleGoalExpand(goal.id);
+            }}
           >
             {isExpanded ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
           </button>

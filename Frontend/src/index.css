@@ -34,6 +34,10 @@
   /* Карточки */
   --card-bg: #242424;
   --card-hover: #2d2d2d;
+  /* Overlays / subtle backgrounds */
+  --muted-overlay: rgba(255, 255, 255, 0.04);
+  --accent-overlay: rgba(255, 107, 53, 0.12);
+  --success-overlay: rgba(76, 175, 80, 0.12);
 }
 
 :root[data-theme="light"] {
@@ -71,6 +75,10 @@
   /* Карточки */
   --card-bg: #ffffff;
   --card-hover: #f9f9f9;
+  /* Overlays / subtle backgrounds */
+  --muted-overlay: rgba(0, 0, 0, 0.04);
+  --accent-overlay: rgba(255, 107, 53, 0.08);
+  --success-overlay: rgba(76, 175, 80, 0.08);
 }
 
 /* Сброс стилей */

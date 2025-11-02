@@ -315,12 +315,12 @@ function SkillAssessments() {
                 {factorChartData.length ? (
                   <ResponsiveContainer width="100%" height={260}>
                     <RadarChart data={factorChartData} outerRadius="70%">
-                      <PolarGrid stroke="var(--border-light)" />
+                      <PolarGrid stroke="var(--border-color)" />
                       <PolarAngleAxis dataKey="factor" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
                       <PolarRadiusAxis
                         domain={[0, 100]}
                         tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
-                        stroke="var(--border-light)"
+                        stroke="var(--border-color)"
                       />
                       <Radar
                         name="Оценка"

@@ -71,7 +71,7 @@
   gap: 8px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--muted-overlay);
   backdrop-filter: blur(12px);
 }
 
@@ -98,8 +98,8 @@
 .filters select {
   border-radius: 999px;
   padding: 8px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
   color: var(--text-primary);
   font-weight: 600;
   min-width: 180px;
@@ -122,7 +122,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid rgba(255, 107, 53, 0.12);
+  border: 1px solid var(--border-color);
 }
 
 .metric-label {
@@ -337,7 +337,7 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--muted-overlay);
   color: var(--text-secondary);
 }
 
@@ -372,7 +372,7 @@
 }
 
 .category-card tbody tr:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--muted-overlay);
 }
 
 .category-card footer {
@@ -423,7 +423,7 @@
 .badge {
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 107, 53, 0.16);
+  background: var(--accent-overlay);
   color: var(--color-accent);
   font-size: 12px;
 }

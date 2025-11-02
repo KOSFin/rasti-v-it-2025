@@ -99,7 +99,7 @@
 }
 
 .participant-chip.self {
-  background: rgba(76, 175, 80, 0.12);
+  background: var(--success-overlay);
   color: var(--color-success);
 }
 
@@ -237,7 +237,7 @@
 
 .candidate-item:hover {
   border-color: var(--color-accent);
-  background: rgba(255, 107, 53, 0.08);
+  background: var(--accent-overlay);
 }
 
 .candidate-item:disabled {
@@ -299,7 +299,7 @@
 }
 
 .participant-picker .btn.inline:hover {
-  background: rgba(255, 107, 53, 0.12);
+  background: var(--accent-overlay);
 }
 
 .meta-text {
@@ -337,7 +337,7 @@
   font-weight: 600;
   color: var(--color-accent);
   padding: 0.5rem 1rem;
-  background: rgba(255, 107, 53, 0.15);
+  background: var(--accent-overlay);
   border-radius: 4px;
 }
 
@@ -433,7 +433,7 @@
 .task-form textarea:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+  box-shadow: 0 0 0 3px var(--accent-overlay);
 }
 
 .task-form-actions {
@@ -486,7 +486,7 @@
 .task-item.pending {
   opacity: 1;
   border-color: var(--color-accent);
-  background: rgba(255, 107, 53, 0.1);
+  background: var(--accent-overlay);
 }
 
 .task-item.pending .task-checkbox {
@@ -665,7 +665,7 @@
 
 .info-block {
   padding: 1rem;
-  background: rgba(33, 150, 243, 0.15);
+  background: rgba(33, 150, 243, 0.12);
   border-left: 4px solid var(--color-info);
   border-radius: 4px;
   margin: 1rem 0;
@@ -695,17 +695,17 @@
 }
 
 .badge.strategic {
-  background: rgba(33, 150, 243, 0.18);
+  background: rgba(33, 150, 243, 0.14);
   color: var(--color-info);
 }
 
 .badge.tactical {
-  background: rgba(76, 175, 80, 0.18);
+  background: var(--success-overlay);
   color: var(--color-success);
 }
 
 .badge.personal {
-  background: rgba(255, 152, 0, 0.18);
+  background: rgba(255, 152, 0, 0.12);
   color: var(--color-warning);
 }
 
@@ -750,8 +750,8 @@
   margin-top: 1rem;
   padding: 1rem;
   border-radius: 6px;
-  border: 1px solid rgba(255, 107, 53, 0.35);
-  background: rgba(255, 107, 53, 0.12);
+  border: 1px solid rgba(255, 107, 53, 0.28);
+  background: var(--accent-overlay);
   display: flex;
   align-items: center;
   justify-content: space-between;

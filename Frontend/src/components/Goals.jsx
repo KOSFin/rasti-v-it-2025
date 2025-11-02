@@ -38,6 +38,7 @@ function Goals() {
   const [formData, setFormData] = useState(initialFormState);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [expandedGoals, setExpandedGoals] = useState(new Set());
   const [filterType, setFilterType] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
@@ -219,6 +220,14 @@ function Goals() {
     }
   };
 
+  const toggleGoalExpand = (goalId) => {
+    setExpandedGoals((prev) => {
+      const next = new Set(prev);
+      if (next.has(goalId)) next.delete(goalId); else next.add(goalId);
+      return next;
+    });
+  };
+
   return (
     <div className="page">
       <header className="page-header">
@@ -388,23 +397,34 @@ function Goals() {
               const progress = getProgress(goal.id);
               return (
                 <article key={goal.id} className="card goal-card">
-                  <header className="card-header">
-                    <div>
-                      <h3>{goal.title}</h3>
-                      <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
-                      {canAssign && goal.employee_name && (
-                        <span className="card-meta">
-                          {goal.employee_name}
-                          {goal.department_name ? ` • ${goal.department_name}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    <button type="button" className="icon-btn" onClick={() => handleDelete(goal.id)}>
-                      <FiTrash2 size={16} />
-                    </button>
-                  </header>
+                    <header
+                      className="card-header"
+                      onClick={(e) => {
+                        const el = e.target;
+                        if (el.closest('button') || el.closest('a') || el.closest('.icon-btn')) return;
+                        toggleGoalExpand(goal.id);
+                      }}
+                    >
+                      <div>
+                        <h3>{goal.title}</h3>
+                        <span className={`badge ${goal.goal_type}`}>{goalTypeLabel(goal.goal_type)}</span>
+                        {canAssign && goal.employee_name && (
+                          <span className="card-meta">
+                            {goal.employee_name}
+                            {goal.department_name ? ` • ${goal.department_name}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <button type="button" className="icon-btn" onClick={() => handleDelete(goal.id)}>
+                        <FiTrash2 size={16} />
+                      </button>
+                    </header>
 
                   <p className="card-description">{goal.description}</p>
+                  {/* allow collapsing of goal details when not expanded */}
+                  {expandedGoals.has(goal.id) ? (
+                    <></>
+                  ) : null}
 
                   <div className="card-row">
                     <span>

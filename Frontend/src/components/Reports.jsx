@@ -205,6 +205,42 @@ function Reports() {
     };
   }, [goals, tasks, potentialAssessments, finalReviews, members.length, goalById]);
 
+  const [selectedEmployeeReport, setSelectedEmployeeReport] = useState(null);
+
+  const openEmployeeReport = (employeeId) => {
+    const employee = members.find((m) => Number(m.id) === Number(employeeId));
+    if (!employee) return;
+
+    const empGoals = goals.filter((g) => String(g.employee) === String(employeeId));
+    const empTasks = tasks.filter((t) => {
+      const g = goalById[t.goal];
+      return g && String(g.employee) === String(employeeId);
+    });
+
+    const completedGoals = empGoals.filter((g) => g.is_completed).length;
+    const totalGoals = empGoals.length;
+    const completedTasks = empTasks.filter((t) => t.is_completed).length;
+    const totalTasksEmp = empTasks.length;
+
+    // team averages for simple comparison
+    const teamAvgGoals = Object.values(metrics.goalMetricsByEmployee).reduce((acc, it) => acc + it.total, 0) / Math.max(1, Object.values(metrics.goalMetricsByEmployee).length);
+    const teamAvgCompletedTasks = Object.values(metrics.taskMetricsByEmployee).reduce((acc, it) => acc + (it.completed || 0), 0) / Math.max(1, Object.values(metrics.taskMetricsByEmployee).length);
+
+    setSelectedEmployeeReport({
+      employee,
+      empGoals,
+      empTasks,
+      completedGoals,
+      totalGoals,
+      completedTasks,
+      totalTasksEmp,
+      teamAvgGoals,
+      teamAvgCompletedTasks,
+    });
+  };
+
+  const closeEmployeeReport = () => setSelectedEmployeeReport(null);
+
   if (!isAdmin && !isManager) {
     return null;
   }
@@ -276,6 +312,53 @@ function Reports() {
           </div>
         </article>
       </section>
+      {selectedEmployeeReport && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={closeEmployeeReport}>
+          <div className="modal large" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <h3>Статистика: {selectedEmployeeReport.employee.full_name || selectedEmployeeReport.employee.username}</h3>
+            </header>
+            <div className="modal-body">
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16}}>
+                <div className="card">
+                  <h4>Цели</h4>
+                  <p>Всего: <strong>{selectedEmployeeReport.totalGoals}</strong></p>
+                  <p>Завершено: <strong>{selectedEmployeeReport.completedGoals}</strong></p>
+                  <p>Среднее по команде: <strong>{selectedEmployeeReport.teamAvgGoals.toFixed(1)}</strong></p>
+                </div>
+                <div className="card">
+                  <h4>Задачи</h4>
+                  <p>Всего: <strong>{selectedEmployeeReport.totalTasksEmp}</strong></p>
+                  <p>Выполнено: <strong>{selectedEmployeeReport.completedTasks}</strong></p>
+                  <p>Среднее по команде: <strong>{selectedEmployeeReport.teamAvgCompletedTasks.toFixed(1)}</strong></p>
+                </div>
+              </div>
+
+              <div style={{marginTop: 16}}>
+                <h4>Список целей</h4>
+                {selectedEmployeeReport.empGoals.length === 0 ? (
+                  <p className="empty">Целей не найдено.</p>
+                ) : (
+                  <ul className="metrics-list">
+                    {selectedEmployeeReport.empGoals.map((g) => (
+                      <li key={g.id}>
+                        <div>
+                          <strong>{g.title}</strong>
+                          <span>{g.is_completed ? 'Завершена' : 'В процессе'}</span>
+                        </div>
+                        <span className="chip">{g.goal_type}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <footer className="modal-footer">
+              <button type="button" className="btn ghost" onClick={closeEmployeeReport}>Закрыть</button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       <section className="grid panels">
         <article className="panel">
@@ -295,7 +378,12 @@ function Reports() {
                     <strong>{item.name}</strong>
                     <span>{item.total} целей</span>
                   </div>
-                  {item.overdue > 0 && <span className="chip warning">Просрочено: {item.overdue}</span>}
+                  <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                    {item.overdue > 0 && <span className="chip warning">Просрочено: {item.overdue}</span>}
+                    <button type="button" className="btn inline" onClick={() => openEmployeeReport(item.id)}>
+                      Подробнее
+                    </button>
+                  </div>
                 </li>
               ))
             )}
