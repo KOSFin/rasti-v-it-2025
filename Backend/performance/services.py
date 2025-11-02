@@ -39,6 +39,8 @@ DEFAULT_SKILL_PERIODS: Tuple[Tuple[int, str], ...] = (
     (24, "24 месяца"),
 )
 
+SKILL_REVIEW_MISS_GRACE_DAYS = 14
+
 if TYPE_CHECKING:
     from api.models import Employee
 
@@ -1408,6 +1410,12 @@ def _team_employers_for_manager(manager: Employer) -> List[int]:
     )
 
 
+def manager_team_employer_ids(manager: Employer) -> List[int]:
+    """Return employer identifiers available to the given manager."""
+
+    return _team_employers_for_manager(manager)
+
+
 def _notify_feedback_required(log: ReviewLog, managers: Iterable[Employer]) -> int:
     """Fan out notifications requesting feedback from leadership."""
 
@@ -1476,6 +1484,12 @@ def skill_review_overview(employer: Employer) -> Dict:
         .select_related("question", "period")
     )
 
+    peer_answers = (
+        ReviewAnswer.objects.filter(employer=employer)
+        .exclude(respondent=employer)
+        .select_related("question", "period")
+    )
+
     per_period_scores: Dict[int, Dict[str, float]] = defaultdict(lambda: {"sum": 0.0, "weight": 0.0})
     for answer in answers:
         if answer.grade == 0:
@@ -1485,7 +1499,17 @@ def skill_review_overview(employer: Employer) -> Dict:
         bucket["sum"] += answer.grade * weight
         bucket["weight"] += weight
 
+    per_period_peer_scores: Dict[int, Dict[str, float]] = defaultdict(lambda: {"sum": 0.0, "weight": 0.0})
+    for answer in peer_answers:
+        if answer.grade == 0:
+            continue
+        weight = float(getattr(answer.question, "weight", 1) or 1)
+        bucket = per_period_peer_scores[answer.period_id]
+        bucket["sum"] += answer.grade * weight
+        bucket["weight"] += weight
+
     timeline: List[Dict] = []
+    score_trend: List[Dict] = []
     tests_total = 0
     tests_completed = 0
     tests_due = 0
@@ -1505,7 +1529,16 @@ def skill_review_overview(employer: Employer) -> Dict:
         due_date = _period_due_date(employer, period, metadata)
 
         stats = per_period_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
+        peer_stats = per_period_peer_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
         average_score = _weighted_average(stats["sum"], stats["weight"])
+        peer_average = _weighted_average(peer_stats["sum"], peer_stats["weight"])
+        combined_average = _weighted_average(
+            stats["sum"] + peer_stats["sum"],
+            stats["weight"] + peer_stats["weight"],
+        )
+        effectiveness_score = (
+            round((combined_average / 5.0) * 100.0, 1) if combined_average is not None else None
+        )
 
         status = "scheduled"
         token = None
@@ -1516,9 +1549,14 @@ def skill_review_overview(employer: Employer) -> Dict:
         awaiting_feedback_since = metadata.get("awaiting_feedback_since")
         waiting_days = 0
         available_from_iso = metadata.get("available_since") or due_date.isoformat()
+        try:
+            available_from_date = datetime.fromisoformat(available_from_iso).date()
+        except (TypeError, ValueError):
+            available_from_date = due_date
+
         days_past_due = (today - due_date).days if today > due_date else 0
-        overdue_threshold = due_date + timedelta(days=30)
-        overdue_flag = today > overdue_threshold
+        overdue_flag = today > due_date
+        miss_deadline = available_from_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
 
         feedback_obj = getattr(log, "feedback", None) if log else None
         if feedback_obj:
@@ -1556,25 +1594,33 @@ def skill_review_overview(employer: Employer) -> Dict:
                         waiting_days = 0
                 waiting_feedback_max = max(waiting_feedback_max, waiting_days)
             elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
-                if today < due_date:
+                if today < available_from_date:
+                    status = "scheduled"
+                elif today < due_date:
                     status = "open"
                 elif today == due_date:
                     status = "due_today"
-                else:
-                    status = "open"
-                if overdue_flag and today >= due_date:
+                elif today <= miss_deadline:
                     status = "overdue"
-                token = str(log.token)
-                expires_at = log.expires_at.isoformat()
+                else:
+                    status = "missed"
+
+                if status != "missed":
+                    token = str(log.token)
+                    expires_at = log.expires_at.isoformat()
             elif log.status == ReviewLog.STATUS_EXPIRED:
                 status = "expired"
             else:
                 status = log.status
         else:
-            if today < due_date:
+            if today < available_from_date:
                 status = "scheduled"
+            elif today < due_date:
+                status = "open"
             elif today == due_date:
                 status = "due_today"
+            elif today <= miss_deadline:
+                status = "overdue"
             else:
                 status = "missed"
 
@@ -1591,9 +1637,9 @@ def skill_review_overview(employer: Employer) -> Dict:
         overdue_delay = 0
         if status == "overdue":
             overdue_entries += 1
-            delay_days = max(days_past_due - 30, 0)
+            delay_days = max(days_past_due, 0)
             overdue_delay_days += delay_days
-            penalty = delay_days + 10
+            penalty = 10.0
             overdue_delay = delay_days
         elif status == "missed":
             penalty = 35
@@ -1614,6 +1660,8 @@ def skill_review_overview(employer: Employer) -> Dict:
             "available_from": available_from_iso,
             "status": status,
             "score": average_score,
+            "peer_score": peer_average,
+            "effectiveness": effectiveness_score,
             "weight_total": stats["weight"],
             "token": token if can_start else None,
             "can_start": can_start,
@@ -1629,6 +1677,19 @@ def skill_review_overview(employer: Employer) -> Dict:
         }
 
         timeline.append(entry)
+
+        score_trend.append(
+            {
+                "period_id": period.id,
+                "period_label": entry["period_label"],
+                "due_date": entry["due_date"],
+                "available_from": entry["available_from"],
+                "self_score": round(average_score, 2) if average_score is not None else None,
+                "peer_score": round(peer_average, 2) if peer_average is not None else None,
+                "effectiveness": effectiveness_score,
+                "status": status,
+            }
+        )
 
         if can_start:
             if not active_review or due_date < date.fromisoformat(active_review["due_date"]):
@@ -1658,6 +1719,8 @@ def skill_review_overview(employer: Employer) -> Dict:
                     "days_left": days_left,
                     "status": status,
                 }
+
+    score_trend.sort(key=lambda item: (item["available_from"], item["due_date"]))
 
     punctuality_score = max(0.0, 100.0 - min(punctuality_penalty, 95.0))
     average_overdue_delay = overdue_delay_days / overdue_entries if overdue_entries else 0.0
@@ -1881,6 +1944,7 @@ def skill_review_overview(employer: Employer) -> Dict:
         "position": employer.position,
         "activation_date": base_date.isoformat(),
         "timeline": timeline,
+    "score_trend": score_trend,
         "next_review": next_review,
         "active_review": active_review,
         "summary": summary,

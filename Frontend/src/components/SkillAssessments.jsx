@@ -13,6 +13,13 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
 } from 'recharts';
 import './Common.css';
 import './SkillAssessments.css';
@@ -127,6 +134,34 @@ function SkillAssessments() {
   const nextReview = overview?.next_review || null;
   const activeReview = overview?.active_review || null;
   const activationDate = overview?.activation_date;
+  const scoreTrend = overview?.score_trend || [];
+
+  const trendChartData = useMemo(() => {
+    if (!Array.isArray(scoreTrend) || scoreTrend.length === 0) {
+      return [];
+    }
+
+    const roundTo = (value, precision = 1) => {
+      if (typeof value !== 'number' || Number.isNaN(value)) {
+        return null;
+      }
+      const factor = 10 ** precision;
+      return Math.round(value * factor) / factor;
+    };
+
+    return scoreTrend.map((item) => ({
+      period: item.period_label,
+      periodId: item.period_id,
+      status: item.status,
+      selfScore: roundTo(item.self_score, 2),
+      peerScore: roundTo(item.peer_score, 2),
+      effectiveness: roundTo(item.effectiveness, 1),
+    }));
+  }, [scoreTrend]);
+
+  const hasTrendData = trendChartData.some(
+    (item) => item.selfScore != null || item.peerScore != null || item.effectiveness != null,
+  );
 
   const metrics = useMemo(() => {
     const formatNumber = (value, fallback = '—') => (value != null ? Number(value).toFixed(1) : fallback);
@@ -298,6 +333,86 @@ function SkillAssessments() {
               <p className="summary-main">{metrics.completionRate}</p>
               <p className="summary-meta">По всем доступным периодам</p>
             </article>
+          </div>
+
+          <div className="score-trend-section mt-24">
+            <header className="score-trend-header">
+              <div>
+                <h3>Динамика оценок</h3>
+                <p className="score-trend-meta">Все периодические тесты с учётом самооценки и обратной связи</p>
+              </div>
+            </header>
+            <div className="score-trend-chart">
+              {hasTrendData ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={trendChartData} margin={{ top: 10, left: 8, right: 16, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                    <XAxis dataKey="period" stroke="var(--text-tertiary)" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} />
+                    <YAxis
+                      yAxisId="scores"
+                      domain={[0, 5]}
+                      stroke="var(--text-tertiary)"
+                      tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
+                      allowDecimals
+                    />
+                    <YAxis
+                      yAxisId="effectiveness"
+                      orientation="right"
+                      domain={[0, 100]}
+                      stroke="var(--text-tertiary)"
+                      tickFormatter={(value) => `${value}%`}
+                      tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }}
+                      allowDecimals
+                    />
+                    <Tooltip
+                      labelFormatter={(label) => `Период: ${label}`}
+                      formatter={(value, name) => {
+                        if (value == null) {
+                          return ['—', name];
+                        }
+                        if (name === 'Эффективность') {
+                          return [`${Number(value).toFixed(1)}%`, name];
+                        }
+                        return [Number(value).toFixed(2), name];
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: 8 }} />
+                    <Line
+                      yAxisId="scores"
+                      type="monotone"
+                      dataKey="selfScore"
+                      name="Самооценка"
+                      stroke="#3182ce"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      connectNulls
+                    />
+                    <Line
+                      yAxisId="scores"
+                      type="monotone"
+                      dataKey="peerScore"
+                      name="Оценка коллег"
+                      stroke="#48bb78"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      connectNulls
+                    />
+                    <Line
+                      yAxisId="effectiveness"
+                      type="monotone"
+                      dataKey="effectiveness"
+                      name="Эффективность"
+                      stroke="#ed8936"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="empty">Недостаточно данных для построения графика динамики.</p>
+              )}
+            </div>
           </div>
 
           {reputation && (

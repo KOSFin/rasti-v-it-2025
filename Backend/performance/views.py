@@ -30,6 +30,7 @@ from .services import (
     fetch_task_form,
     generate_skill_review_cycles,
     manager_skill_review_queue,
+    manager_team_employer_ids,
     review_analytics,
     skill_review_overview,
     submit_skill_answers,
@@ -129,10 +130,10 @@ class SkillReviewOverviewView(APIView):
 
     def get(self, request):
         employer = Employer.objects.filter(user=request.user).first()
-        if not employer:
-            employee = Employee.objects.filter(user=request.user).first()
-            if employee:
-                employer = sync_employer_from_employee(employee)
+        employee = Employee.objects.filter(user=request.user).first()
+
+        if not employer and employee:
+            employer = sync_employer_from_employee(employee)
 
         employer_id = request.query_params.get("employer_id")
         target_employer = employer
@@ -140,11 +141,32 @@ class SkillReviewOverviewView(APIView):
         if employer_id:
             target_employer = get_object_or_404(Employer, pk=employer_id)
             if not request.user.is_superuser:
-                if not employer or target_employer.id != employer.id:
+                if not employer:
                     return Response(
                         {"detail": "Недостаточно прав для просмотра данных другого сотрудника."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
+
+                if target_employer.id != employer.id:
+                    allowed_roles = {
+                        Employee.Role.MANAGER,
+                        Employee.Role.BUSINESS_PARTNER,
+                        Employee.Role.ADMIN,
+                    }
+                    if not employee or employee.role not in allowed_roles:
+                        return Response(
+                            {"detail": "Недостаточно прав для просмотра данных другого сотрудника."},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
+
+                    allowed_ids = set(manager_team_employer_ids(employer))
+                    allowed_ids.add(employer.id)
+
+                    if target_employer.id not in allowed_ids:
+                        return Response(
+                            {"detail": "Недостаточно прав для просмотра данных этого сотрудника."},
+                            status=status.HTTP_403_FORBIDDEN,
+                        )
 
         if not target_employer:
             return Response(
