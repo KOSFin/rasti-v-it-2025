@@ -1215,10 +1215,15 @@ def manager_skill_review_queue(manager: Employer) -> Dict:
         days_overdue = max((today - due_date).days, 0) if today > due_date else 0
         overdue_threshold_passed = today > (due_date + timedelta(days=30))
         feedback_payload = None
+        feedback_obj = getattr(log, "feedback", None)
 
-        if getattr(log, "feedback", None):
-            feedback_obj = log.feedback
+        if feedback_obj:
             shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
+            if log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
+                shared_iso = (shared_ts or timezone.now()).isoformat()
+                _synchronize_feedback_completion(log, shared_at_iso=shared_iso)
+                shared_ts = datetime.fromisoformat(shared_iso)
+
             feedback_payload = {
                 "author": feedback_obj.author.fio,
                 "message": feedback_obj.message,
@@ -1277,6 +1282,33 @@ def manager_skill_review_queue(manager: Employer) -> Dict:
     return {"items": items, "stats": stats}
 
 
+def _synchronize_feedback_completion(log: ReviewLog, *, shared_at_iso: str) -> None:
+    metadata = {**(log.metadata or {})}
+    metadata.pop("awaiting_feedback_since", None)
+    metadata["feedback_shared_at"] = shared_at_iso
+
+    if log.status != ReviewLog.STATUS_COMPLETED:
+        log.status = ReviewLog.STATUS_COMPLETED
+
+    log.metadata = metadata
+    log.save(update_fields=["status", "metadata", "updated_at"])
+
+    if log.respondent_id != log.employer_id:
+        sibling = (
+            ReviewLog.objects.filter(
+                employer=log.employer,
+                respondent=log.employer,
+                period=log.period,
+                context=ReviewLog.CONTEXT_SKILL,
+            )
+            .exclude(pk=log.pk)
+            .order_by("-updated_at")
+            .first()
+        )
+        if sibling:
+            _synchronize_feedback_completion(sibling, shared_at_iso=shared_at_iso)
+
+
 def submit_skill_feedback(manager: Employer, *, log_id: int, message: str) -> Dict:
     try:
         log = ReviewLog.objects.select_related("employer", "period", "feedback", "feedback__author").get(
@@ -1305,10 +1337,9 @@ def submit_skill_feedback(manager: Employer, *, log_id: int, message: str) -> Di
     )
     feedback.mark_shared()
 
-    metadata = {**(log.metadata or {}), "feedback_shared_at": feedback.shared_at.isoformat() if feedback.shared_at else timezone.now().isoformat()}
-    log.status = ReviewLog.STATUS_COMPLETED
-    log.metadata = metadata
-    log.save(update_fields=["status", "metadata", "updated_at"])
+    shared_at_iso = feedback.shared_at.isoformat() if feedback.shared_at else timezone.now().isoformat()
+
+    _synchronize_feedback_completion(log, shared_at_iso=shared_at_iso)
 
     if manager.pk:
         SiteNotification.objects.filter(related_log=log, recipient=manager).update(
@@ -1581,8 +1612,13 @@ def skill_review_overview(employer: Employer) -> Dict:
         miss_deadline = available_until_date
 
         feedback_obj = getattr(log, "feedback", None) if log else None
-        if feedback_obj:
+        if feedback_obj and log:
             shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
+            if log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
+                shared_iso = (shared_ts or timezone.now()).isoformat()
+                _synchronize_feedback_completion(log, shared_at_iso=shared_iso)
+                shared_ts = datetime.fromisoformat(shared_iso)
+
             feedback_payload = {
                 "author": feedback_obj.author.fio,
                 "message": feedback_obj.message,
