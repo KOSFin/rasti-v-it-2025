@@ -20,7 +20,7 @@
 
 | Ресурс | URL |
 |--------|-----|
-| **Фронтенд приложения (ДЕМО)** | [https://hak-rosti-v-it.ruka.me](https://hak-rosti-v-it.ruka.me) |
+| **Фронтенд приложения (ДЕМО) (для работы может понадобится VPN - размещено на CloudFlare)** | [https://hak-rosti-v-it.ruka.me](https://hak-rosti-v-it.ruka.me) |
 | **Backend API** | [https://api-hak-rosti-v-it.ruka.me](https://api-hak-rosti-v-it.ruka.me) |
 | **Swagger документация** | [https://api-hak-rosti-v-it.ruka.me/api/docs/](https://api-hak-rosti-v-it.ruka.me/api/docs/) |
 | **ReDoc документация** | [https://api-hak-rosti-v-it.ruka.me/api/redoc/](https://api-hak-rosti-v-it.ruka.me/api/redoc/) |
