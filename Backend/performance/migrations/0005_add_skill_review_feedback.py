@@ -6,7 +6,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("performance", "0004_repair_employee_position_schema"),
+        ("performance", "0003_employer_activation_date_skillquestion_weight"),
     ]
 
     operations = [
