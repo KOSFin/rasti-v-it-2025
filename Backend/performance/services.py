@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
 
 from django.db import transaction
@@ -56,6 +57,56 @@ class ReviewCycleResult:
         }
 
 
+DEFAULT_SKILL_PERIODS: Tuple[Tuple[int, str], ...] = (
+    (0, "Старт"),
+    (1, "1 месяц"),
+    (3, "3 месяца"),
+    (6, "6 месяцев"),
+    (12, "12 месяцев"),
+)
+
+
+def _activation_start_date(employer: Employer) -> Optional[date]:
+    base = employer.activation_date or employer.date_of_employment
+    return base
+
+
+def add_months(base: date, months: int) -> date:
+    """Add a number of months to the provided date while keeping month-end constraints."""
+
+    if months == 0:
+        return base
+
+    month_index = base.month - 1 + months
+    year = base.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(base.day, monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def ensure_default_skill_periods() -> List[ReviewPeriod]:
+    """Guarantee that baseline review periods exist in the database."""
+
+    ensured_ids: List[int] = []
+    for month_period, label in DEFAULT_SKILL_PERIODS:
+        period, _ = ReviewPeriod.objects.get_or_create(
+            month_period=month_period,
+            defaults={"name": label, "is_active": True},
+        )
+        ensured_ids.append(period.id)
+
+    for offset in range(24, 121, 12):  # yearly checkpoints after the first year
+        period, _ = ReviewPeriod.objects.get_or_create(
+            month_period=offset,
+            defaults={"name": f"{offset} месяцев", "is_active": True},
+        )
+        ensured_ids.append(period.id)
+
+    return list(
+        ReviewPeriod.objects.filter(id__in=ensured_ids).order_by("month_period")
+    )
+
+
 def months_between(start: date, end: date) -> int:
     """Return the full month difference between two dates."""
 
@@ -67,6 +118,12 @@ def months_between(start: date, end: date) -> int:
     return months
 
 
+def _weighted_average(sum_value: float, total_weight: float) -> Optional[float]:
+    if not total_weight:
+        return None
+    return round(sum_value / total_weight, 2)
+
+
 def _is_period_due(period: ReviewPeriod, *, current_date: date, employer: Employer) -> bool:
     if not period.is_active:
         return False
@@ -74,14 +131,23 @@ def _is_period_due(period: ReviewPeriod, *, current_date: date, employer: Employ
         return False
     if period.end_date and current_date > period.end_date:
         return False
-    return months_between(employer.date_of_employment, current_date) == period.month_period
+    base_date = _activation_start_date(employer)
+    if not base_date:
+        return False
+    if current_date < base_date:
+        return False
+    return months_between(base_date, current_date) == period.month_period
 
 
 def _ensure_zero_period() -> ReviewPeriod:
+    ensure_default_skill_periods()
     period, _ = ReviewPeriod.objects.get_or_create(
         month_period=0,
-        defaults={"name": "start", "start_date": None, "end_date": None, "is_active": True},
+        defaults={"name": "Старт", "start_date": None, "end_date": None, "is_active": True},
     )
+    if not period.name:
+        period.name = "Старт"
+        period.save(update_fields=["name", "updated_at"])
     return period
 
 
@@ -89,7 +155,10 @@ def _active_employers(as_of: date) -> Iterable[Employer]:
     queryset = Employer.objects.all().order_by("fio")
     active = []
     for employer in queryset:
-        if employer.date_of_employment > as_of:
+        base_date = _activation_start_date(employer)
+        if base_date is None:
+            continue
+        if base_date > as_of:
             continue
         if employer.date_of_dismissal and employer.date_of_dismissal <= as_of:
             continue
@@ -287,6 +356,11 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
 
     zero_period = _ensure_zero_period()
 
+    if employer.activation_date is None:
+        employer.activation_date = timezone.now().date()
+        employer.save(update_fields=["activation_date", "updated_at"])
+    base_date = _activation_start_date(employer) or timezone.now().date()
+
     existing_log = (
         ReviewLog.objects.filter(
             employer=employer,
@@ -319,7 +393,11 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
         respondent=employer,
         period=zero_period,
         context=ReviewLog.CONTEXT_SKILL,
-        metadata={"review_type": "self", "trigger": "first_login"},
+        metadata={
+            "review_type": "self",
+            "trigger": "first_login",
+            "due_at": base_date.isoformat(),
+        },
     )
     review_log.status = ReviewLog.STATUS_PENDING
     review_log.save(update_fields=["status", "updated_at"])
@@ -335,7 +413,8 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
     if not questions:
         return result.as_dict()
 
-    periods = list(ReviewPeriod.objects.filter(is_active=True))
+    ensure_default_skill_periods()
+    periods = list(ReviewPeriod.objects.filter(is_active=True).order_by("month_period"))
     zero_period = next((p for p in periods if p.month_period == 0), None) or _ensure_zero_period()
 
     active_employees = list(_active_employers(current_date))
@@ -343,11 +422,14 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
         return result.as_dict()
 
     for employer in active_employees:
-        days_since_hire = (current_date - employer.date_of_employment).days
-        if days_since_hire < 0:
+        base_date = _activation_start_date(employer)
+        if base_date is None:
+            continue
+        days_since_activation = (current_date - base_date).days
+        if days_since_activation < 0:
             continue
 
-        if days_since_hire == 0:
+        if days_since_activation == 0:
             created_answers, _ = _create_question_placeholders(
                 employer=employer,
                 respondent=employer,
@@ -361,7 +443,11 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                     respondent=employer,
                     period=zero_period,
                     context=ReviewLog.CONTEXT_SKILL,
-                    metadata={"review_type": "self", "trigger": "hire_day"},
+                    metadata={
+                        "review_type": "self",
+                        "trigger": "activation_day",
+                        "due_at": base_date.isoformat(),
+                    },
                 )
                 if notification_created:
                     result.notifications_created += 1
@@ -371,6 +457,7 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                 continue
             if not _is_period_due(period, current_date=current_date, employer=employer):
                 continue
+            due_at = add_months(base_date, period.month_period)
 
             for respondent in active_employees:
                 if respondent.id == employer.id:
@@ -388,7 +475,11 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                         respondent=respondent,
                         period=period,
                         context=ReviewLog.CONTEXT_SKILL,
-                        metadata={"review_type": "peer", "period": period.month_period},
+                        metadata={
+                            "review_type": "peer",
+                            "period": period.month_period,
+                            "due_at": due_at.isoformat(),
+                        },
                     )
                     if notification_created:
                         result.notifications_created += 1
@@ -586,22 +677,36 @@ def review_analytics(
         }
 
     analytics: Dict[Tuple[str, str], Dict] = {}
-    overall_self_grades: List[int] = []
-    overall_peer_grades: List[int] = []
+    overall_self_sum = 0.0
+    overall_self_weight = 0.0
+    overall_peer_sum = 0.0
+    overall_peer_weight = 0.0
 
-    answers_by_period_category: Dict[Tuple[str, str, int], Dict[str, List[int]]] = defaultdict(lambda: {"self": [], "peer": []})
+    answers_by_period_category: Dict[Tuple[str, str, int], Dict[str, Dict[str, float]]] = defaultdict(
+        lambda: {
+            "self": {"sum": 0.0, "weight": 0.0},
+            "peer": {"sum": 0.0, "weight": 0.0},
+        }
+    )
 
     for answer in answers:
         if answer.grade == 0:
             continue
         key = (answer.question.category.skill_type, answer.question.category.name, answer.period_id)
         bucket = answers_by_period_category[key]
+        weight = float(getattr(answer.question, "weight", 1) or 1)
         if answer.is_self_review:
-            bucket["self"].append(answer.grade)
-            overall_self_grades.append(answer.grade)
+            bucket_self = bucket["self"]
+            bucket_self["sum"] += answer.grade * weight
+            bucket_self["weight"] += weight
+            overall_self_sum += answer.grade * weight
+            overall_self_weight += weight
         else:
-            bucket["peer"].append(answer.grade)
-            overall_peer_grades.append(answer.grade)
+            bucket_peer = bucket["peer"]
+            bucket_peer["sum"] += answer.grade * weight
+            bucket_peer["weight"] += weight
+            overall_peer_sum += answer.grade * weight
+            overall_peer_weight += weight
 
     periods_map: Dict[int, ReviewPeriod] = {
         a.period_id: a.period for a in answers
@@ -614,12 +719,15 @@ def review_analytics(
         key=lambda item: (periods_map[item[0][2]].month_period, item[0][0], item[0][1]),
     ):
         period_obj = periods_map[period_id]
+        self_avg = _weighted_average(values["self"]["sum"], values["self"]["weight"])
+        peer_avg = _weighted_average(values["peer"]["sum"], values["peer"]["weight"])
+
         period_entry = {
             "period": _period_label(period_obj),
             "period_order": period_obj.month_period,
             "period_id": period_obj.id,
-            "self": round(sum(values["self"]) / len(values["self"]), 2) if values["self"] else None,
-            "peer": round(sum(values["peer"]) / len(values["peer"]), 2) if values["peer"] else None,
+            "self": self_avg,
+            "peer": peer_avg,
             "trend_self": None,
             "trend_peer": None,
         }
@@ -645,8 +753,8 @@ def review_analytics(
             prev_peer = peer_grade if peer_grade is not None else prev_peer
             entry.pop("period_order", None)
 
-    overall_self = round(sum(overall_self_grades) / len(overall_self_grades), 2) if overall_self_grades else 0
-    overall_peer = round(sum(overall_peer_grades) / len(overall_peer_grades), 2) if overall_peer_grades else 0
+    overall_self = _weighted_average(overall_self_sum, overall_self_weight) or 0
+    overall_peer = _weighted_average(overall_peer_sum, overall_peer_weight) or 0
 
     return {
         "status": "success",
@@ -981,6 +1089,254 @@ def submit_task_answers(token: str, answers: List[Dict]) -> Dict:
         "respondent_id": review_log.respondent_id,
         "answers_saved": updated,
         "review_completed": not remaining,
+    }
+
+
+def _log_completed_at(log: ReviewLog) -> Optional[datetime]:
+    metadata = log.metadata or {}
+    submitted_at = metadata.get("submitted_at")
+    if submitted_at:
+        try:
+            return datetime.fromisoformat(submitted_at)
+        except (TypeError, ValueError):
+            pass
+    return log.updated_at
+
+
+def _employee_for_employer(employer: Employer) -> Optional["Employee"]:
+    if employer.user_id is None:
+        return None
+    from api.models import Employee  # local import to avoid circular dependencies
+
+    return Employee.objects.select_related("department").filter(user=employer.user).first()
+
+
+def skill_review_overview(employer: Employer) -> Dict:
+    """Return combined timeline and summary metrics for an employer's skill reviews."""
+
+    ensure_default_skill_periods()
+    today = timezone.now().date()
+    base_date = _activation_start_date(employer) or today
+
+    periods = list(ReviewPeriod.objects.filter(is_active=True).order_by("month_period"))
+    logs = (
+        ReviewLog.objects.filter(
+            employer=employer,
+            respondent=employer,
+            context=ReviewLog.CONTEXT_SKILL,
+        )
+        .select_related("period")
+        .order_by("period__month_period", "-created_at")
+    )
+
+    logs_by_period: Dict[int, ReviewLog] = {}
+    for log in logs:
+        if log.period_id is None:
+            continue
+        logs_by_period.setdefault(log.period_id, log)
+
+    answers = (
+        ReviewAnswer.objects.filter(employer=employer, respondent=employer)
+        .select_related("question", "period")
+    )
+
+    per_period_scores: Dict[int, Dict[str, float]] = defaultdict(lambda: {"sum": 0.0, "weight": 0.0})
+    for answer in answers:
+        if answer.grade == 0:
+            continue
+        weight = float(getattr(answer.question, "weight", 1) or 1)
+        bucket = per_period_scores[answer.period_id]
+        bucket["sum"] += answer.grade * weight
+        bucket["weight"] += weight
+
+    timeline: List[Dict] = []
+    tests_total = 0
+    tests_completed = 0
+    tests_due = 0
+    tests_due_completed = 0
+    overdue_entries = 0
+    active_review: Optional[Dict] = None
+    next_review: Optional[Dict] = None
+
+    for period in periods:
+        due_date = add_months(base_date, period.month_period)
+        log = logs_by_period.get(period.id)
+        metadata = log.metadata or {} if log else {}
+        due_at_metadata = metadata.get("due_at")
+        if due_at_metadata:
+            try:
+                due_date = date.fromisoformat(due_at_metadata)
+            except ValueError:
+                pass
+
+        stats = per_period_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
+        average_score = _weighted_average(stats["sum"], stats["weight"])
+
+        status = "scheduled"
+        token = None
+        expires_at = None
+        completed_at = None
+
+        if log:
+            if log.status == ReviewLog.STATUS_COMPLETED:
+                status = "completed"
+                completed_dt = _log_completed_at(log)
+                completed_at = completed_dt.isoformat() if completed_dt else None
+            elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
+                if due_date < today:
+                    status = "overdue"
+                elif due_date == today:
+                    status = "due_today"
+                else:
+                    status = "open"
+                token = str(log.token)
+                expires_at = log.expires_at.isoformat()
+            elif log.status == ReviewLog.STATUS_EXPIRED:
+                status = "expired"
+            else:
+                status = log.status
+        else:
+            if due_date < today:
+                status = "missed"
+            elif due_date == today:
+                status = "due_today"
+
+        tests_total += 1
+        if status == "completed":
+            tests_completed += 1
+        if due_date <= today:
+            tests_due += 1
+            if status == "completed":
+                tests_due_completed += 1
+        if status == "overdue":
+            overdue_entries += 1
+
+        entry = {
+            "period_id": period.id,
+            "period_label": _period_label(period),
+            "month_offset": period.month_period,
+            "due_date": due_date.isoformat(),
+            "status": status,
+            "score": average_score,
+            "weight_total": stats["weight"],
+            "token": token,
+            "expires_at": expires_at,
+            "completed_at": completed_at,
+            "metadata": metadata,
+        }
+
+        timeline.append(entry)
+
+        is_actionable = status in {"open", "due_today", "overdue"}
+        if is_actionable:
+            if not active_review or entry["due_date"] < active_review["due_date"]:
+                active_review = {
+                    "period_id": period.id,
+                    "period_label": entry["period_label"],
+                    "status": status,
+                    "token": token,
+                    "expires_at": expires_at,
+                    "due_date": entry["due_date"],
+                }
+
+        if status != "completed" and due_date >= today:
+            if not next_review or due_date < date.fromisoformat(next_review["due_date"]):
+                days_left = (due_date - today).days
+                next_review = {
+                    "period_id": period.id,
+                    "period_label": entry["period_label"],
+                    "due_date": due_date.isoformat(),
+                    "days_left": days_left,
+                    "status": status,
+                }
+
+    analytics_payload = review_analytics(employer=employer, period=None, skill_type="all")
+    try:
+        adaptation_payload = adaptation_index(employer=employer, period=None, skill_type="all")
+    except ServiceError:
+        adaptation_payload = {
+            "AdaptationIndex": 0,
+            "color_zone": "neutral",
+            "interpretation": "Недостаточно данных для расчёта.",
+        }
+
+    averages = analytics_payload.get("averages", {})
+    self_average = averages.get("overall_self") or 0
+    peer_average = averages.get("overall_peer") or 0
+    delta_average = averages.get("delta") or 0
+
+    adaptation_index_value = adaptation_payload.get("AdaptationIndex")
+    adaptation_zone = adaptation_payload.get("color_zone")
+    adaptation_interpretation = adaptation_payload.get("interpretation")
+
+    employee = _employee_for_employer(employer)
+    performance_index = None
+    goals_completion = None
+    task_alignment = None
+
+    if employee:
+        from api.models import Goal, ManagerReview, Task
+
+        goal_qs = Goal.objects.filter(employee=employee)
+        goals_total = goal_qs.count()
+        goals_completed = goal_qs.filter(is_completed=True).count()
+        if goals_total:
+            goals_completion = round((goals_completed / goals_total) * 100, 1)
+
+        task_qs = Task.objects.filter(goal__employee=employee)
+        task_total = task_qs.count()
+        task_completed = task_qs.filter(is_completed=True).count()
+        if task_total:
+            task_alignment = round((task_completed / task_total) * 100, 1)
+
+        manager_reviews = ManagerReview.objects.filter(employee=employee)
+        manager_avg = manager_reviews.aggregate(avg=Avg("calculated_score"))
+        avg_score = manager_avg.get("avg")
+        if avg_score is not None:
+            performance_index = round((avg_score / 9) * 100, 1)
+
+    reviews_completion_rate = round((tests_due_completed / tests_due) * 100, 1) if tests_due else None
+
+    completed_scores = [
+        (entry["due_date"], entry["score"])
+        for entry in timeline
+        if entry["status"] == "completed" and entry["score"] is not None
+    ]
+    completed_scores.sort(key=lambda item: item[0])
+    last_growth = None
+    if len(completed_scores) >= 2:
+        last_growth = round(completed_scores[-1][1] - completed_scores[-2][1], 2)
+
+    summary = {
+        "self_average": round(self_average, 2) if self_average is not None else 0,
+        "peer_average": round(peer_average, 2) if peer_average is not None else 0,
+        "delta": round(delta_average, 2) if delta_average is not None else 0,
+        "adaptation_index": adaptation_index_value,
+        "adaptation_zone": adaptation_zone,
+        "adaptation_interpretation": adaptation_interpretation,
+        "performance_index": performance_index,
+        "goals_completion_rate": goals_completion,
+        "task_alignment_rate": task_alignment,
+        "reviews_completion_rate": reviews_completion_rate,
+        "tests_completed": tests_completed,
+        "tests_total": tests_total,
+        "reviews_due": tests_due,
+        "reviews_due_completed": tests_due_completed,
+        "overdue_reviews": overdue_entries,
+        "last_growth": last_growth,
+    }
+
+    return {
+        "status": "success",
+        "employer_id": employer.id,
+        "fio": employer.fio,
+        "position": employer.position,
+        "activation_date": base_date.isoformat(),
+        "timeline": timeline,
+        "next_review": next_review,
+        "active_review": active_review,
+        "summary": summary,
+        "analytics": analytics_payload,
     }
 
 

@@ -8,6 +8,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.models import Employee
 from .models import Employer, ReviewGoal, ReviewPeriod, ReviewTask, SiteNotification
 from .serializers import (
     AdaptationIndexQuerySerializer,
@@ -27,9 +28,11 @@ from .services import (
     fetch_task_form,
     generate_skill_review_cycles,
     review_analytics,
+    skill_review_overview,
     submit_skill_answers,
     submit_task_answers,
     trigger_task_reviews,
+    sync_employer_from_employee,
 )
 
 
@@ -115,6 +118,38 @@ class ReviewAnalyticsView(APIView):
             skill_type=serializer.validated_data["skills_type"],
         )
         return Response(result)
+
+
+class SkillReviewOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        employer = Employer.objects.filter(user=request.user).first()
+        if not employer:
+            employee = Employee.objects.filter(user=request.user).first()
+            if employee:
+                employer = sync_employer_from_employee(employee)
+
+        employer_id = request.query_params.get("employer_id")
+        target_employer = employer
+
+        if employer_id:
+            target_employer = get_object_or_404(Employer, pk=employer_id)
+            if not request.user.is_superuser:
+                if not employer or target_employer.id != employer.id:
+                    return Response(
+                        {"detail": "Недостаточно прав для просмотра данных другого сотрудника."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+        if not target_employer:
+            return Response(
+                {"detail": "Профиль сотрудника не найден. Обратитесь к администратору."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = skill_review_overview(target_employer)
+        return Response(payload)
 
 
 class AdaptationIndexView(APIView):

@@ -38,6 +38,7 @@ class Employer(TimeStampedModel):
     birthday = models.DateField(null=True, blank=True)
     email = models.EmailField(unique=True)
     date_of_employment = models.DateField()
+    activation_date = models.DateField(null=True, blank=True)
     date_of_dismissal = models.DateField(null=True, blank=True)
     position = models.CharField(max_length=255)
 
@@ -99,6 +100,7 @@ class SkillQuestion(TimeStampedModel):
     category = models.ForeignKey(SkillCategory, on_delete=models.CASCADE, related_name="questions")
     question_text = models.TextField()
     grade_description = models.TextField()
+    weight = models.PositiveIntegerField(default=1, help_text="Weight multiplier for aggregated scores")
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -7,6 +7,7 @@ urlpatterns = [
     path("review/form/", views.ReviewFormView.as_view(), name="review-form"),
     path("review/submit/", views.ReviewSubmitView.as_view(), name="review-submit"),
     path("review/analytics/", views.ReviewAnalyticsView.as_view(), name="review-analytics"),
+    path("review/overview/", views.SkillReviewOverviewView.as_view(), name="review-overview"),
     path("review/adaptation-index/", views.AdaptationIndexView.as_view(), name="review-adaptation-index"),
     path("task-goal/create/", views.TaskGoalCreateView.as_view(), name="task-goal-create"),
     path("task-review/start/", views.TaskReviewTriggerView.as_view(), name="task-review-start"),
