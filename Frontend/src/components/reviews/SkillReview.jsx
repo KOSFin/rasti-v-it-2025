@@ -66,7 +66,6 @@ const SkillReview = () => {
     setSubmitting(true);
     setSuccessMessage('');
 
-    // Basic client-side validation: ensure there is at least one answer
     const answerEntries = Object.entries(answers).map(([questionId, grade]) => ({
       id_question: Number(questionId),
       grade: Number(grade ?? 0),

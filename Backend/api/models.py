@@ -51,7 +51,6 @@ class Employee(models.Model):
         return f"{self.user.get_full_name()} - {position_label}"
 
     def save(self, *args, **kwargs):
-        # Поддерживаем совместимость старого флага менеджера с новой системой ролей
         if self.is_manager and self.role != self.Role.MANAGER:
             self.role = self.Role.MANAGER
 
@@ -148,13 +147,12 @@ class SelfAssessment(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='self_assessments')
     
-    # Вопросы самооценки
     achieved_results = models.TextField()
     personal_contribution = models.TextField()
     skills_acquired = models.TextField()
     improvements_needed = models.TextField()
-    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
-    satisfaction_score = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])
+    satisfaction_score = models.IntegerField(choices=[(i, i) for i in range(11)])
     
     calculated_score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -167,10 +165,9 @@ class Feedback360(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_feedbacks')
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='feedbacks')
     
-    # Вопросы оценки 360
-    results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])
     personal_qualities = models.TextField()
-    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])
     improvements_suggested = models.TextField()
     
     calculated_score = models.IntegerField(default=0)
@@ -184,13 +181,12 @@ class ManagerReview(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_reviews')
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='manager_reviews')
     
-    # Вопросы оценки руководителя
-    results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])
     personal_qualities_feedback = models.TextField()
     personal_contribution_feedback = models.TextField()
-    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])
     improvements_recommended = models.TextField()
-    overall_rating = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    overall_rating = models.IntegerField(choices=[(i, i) for i in range(11)])
     
     calculated_score = models.IntegerField(default=0)
     feedback_summary = models.TextField()
@@ -203,13 +199,10 @@ class PotentialAssessment(models.Model):
     manager = models.ForeignKey(Employee, on_delete=models.CASCADE)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='potential_assessments')
     
-    # Профессиональные качества
     professional_qualities = models.JSONField(default=list)
     
-    # Личные качества
     personal_qualities = models.JSONField(default=list)
     
-    # Дополнительные вопросы
     needed_motivation = models.BooleanField(default=False)
     communication_issues = models.BooleanField(default=False)
     
@@ -230,24 +223,21 @@ class PotentialAssessment(models.Model):
     ]
     successor_readiness = models.CharField(max_length=3, choices=READINESS_CHOICES, blank=True)
     
-    retention_risk = models.IntegerField(choices=[(i, i) for i in range(11)])  # 0-10
+    retention_risk = models.IntegerField(choices=[(i, i) for i in range(11)])
     
-    # Баллы
     performance_score = models.IntegerField(default=0)
     potential_score = models.IntegerField(default=0)
     
-    # 9-Box positioning
-    nine_box_x = models.IntegerField(null=True, blank=True)  # Результативность
-    nine_box_y = models.IntegerField(null=True, blank=True)  # Потенциал
+    nine_box_x = models.IntegerField(null=True, blank=True)
+    nine_box_y = models.IntegerField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
 
 class GoalEvaluationNotification(models.Model):
-    """Уведомление о необходимости оценить завершенную цель коллеги"""
     recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='evaluation_notifications')
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='evaluation_notifications')
     is_read = models.BooleanField(default=False)
-    is_completed = models.BooleanField(default=False)  # Оценка выполнена
+    is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -261,7 +251,6 @@ class FinalReview(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     review_period = models.CharField(max_length=50)  # Например: "1 полугодие 2025"
     
-    # Итоговые баллы
     self_assessment_score = models.IntegerField(default=0)
     feedback_360_score = models.IntegerField(default=0)
     manager_review_score = models.IntegerField(default=0)

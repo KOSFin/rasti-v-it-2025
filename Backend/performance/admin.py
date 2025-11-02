@@ -25,7 +25,7 @@ class SkillQuestionAdmin(admin.ModelAdmin):
 	search_fields = ("question_text", "grade_description", "category__name")
 	autocomplete_fields = ("category",)
 
-	def short_text(self, obj):  # pragma: no cover - presentation
+	def short_text(self, obj):
 		return (obj.question_text or "").strip()[:80]
 
 

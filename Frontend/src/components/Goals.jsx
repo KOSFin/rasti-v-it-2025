@@ -102,7 +102,7 @@ function Goals() {
     if (canAssign) {
       loadEmployees();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [canAssign]);
 
   useEffect(() => {
@@ -363,7 +363,7 @@ function Goals() {
                 name="task_link"
                 value={formData.task_link}
                 onChange={formChange}
-                placeholder="https://..."
+                placeholder="https:
               />
             </label>
 
@@ -421,7 +421,7 @@ function Goals() {
                     </header>
 
                   <p className="card-description">{goal.description}</p>
-                  {/* allow collapsing of goal details when not expanded */}
+                  {}
                   {expandedGoals.has(goal.id) ? (
                     <></>
                   ) : null}

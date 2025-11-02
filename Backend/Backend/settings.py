@@ -2,20 +2,14 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-79n3trg54fp5tyd3lgrk%0e(t4&vq60_0emxy#q%kbktm1()xx')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-# Явно добавляем разрешенные хосты
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 if ALLOWED_HOSTS == ['*']:
     ALLOWED_HOSTS = [
@@ -27,7 +21,6 @@ if ALLOWED_HOSTS == ['*']:
     ]
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -78,8 +71,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'Backend.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
     'default': {
@@ -93,8 +84,6 @@ DATABASES = {
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -112,8 +101,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
@@ -124,14 +111,10 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -164,11 +147,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS settings - разрешаем все
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-# Явно указываем разрешенные origins для production
 CORS_ALLOWED_ORIGINS = [
     'https://hak-rosti-v-it.ruka.me',
     'https://api-hak-rosti-v-it.ruka.me',
@@ -200,7 +181,6 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Дополнительные настройки для CORS
 CSRF_TRUSTED_ORIGINS = [
     'https://rastivit2025-service-3diepp-12485b-77-110-105-180.traefik.me',
     'https://rastivit2025-service-3diepp-ea5c86-77-110-105-180.traefik.me',
@@ -210,7 +190,6 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1',
 ]
 
-# Отключаем некоторые security проверки для работы через прокси
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False

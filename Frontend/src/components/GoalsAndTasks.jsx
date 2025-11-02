@@ -28,7 +28,6 @@ const extractResults = (response) => {
   return Array.isArray(response.data) ? response.data : response.data?.results || [];
 };
 
-// Форматирование даты в РФ формат (дд.мм.гггг)
 const formatDateRU = (dateString) => {
   if (!dateString) return '—';
   const date = new Date(dateString);
@@ -38,20 +37,17 @@ const formatDateRU = (dateString) => {
   return `${day}.${month}.${year}`;
 };
 
-// Получить сегодняшнюю дату в формате yyyy-mm-dd
 const getTodayDate = () => {
   const today = new Date();
   return today.toISOString().split('T')[0];
 };
 
-// Получить дату через неделю в формате yyyy-mm-dd
 const getDateAfterWeek = () => {
   const today = new Date();
   today.setDate(today.getDate() + 7);
   return today.toISOString().split('T')[0];
 };
 
-// Вычислить количество дней до дедлайна
 const getDaysUntilDeadline = (dateString) => {
   if (!dateString) return null;
   const deadline = new Date(dateString);
@@ -98,7 +94,7 @@ function GoalsAndTasks() {
   const [expandedGoals, setExpandedGoals] = useState(new Set());
   const [editingTask, setEditingTask] = useState(null);
   const [taskFormData, setTaskFormData] = useState(initialTaskForm);
-  const [showTaskForm, setShowTaskForm] = useState(null); // goalId
+  const [showTaskForm, setShowTaskForm] = useState(null); 
 
   const [filterType, setFilterType] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,7 +113,6 @@ function GoalsAndTasks() {
   const isAdmin = Boolean(user?.is_superuser);
   const canAssign = isAdmin || isManager;
 
-  // Мемоизированные значения для участников цели
   const employeesLookup = useMemo(() => {
     return employees.reduce((acc, item) => {
       acc[String(item.id)] = item;
@@ -226,7 +221,7 @@ function GoalsAndTasks() {
     if (!canAssign) return;
 
     const params = { page_size: 300, ordering: 'user__last_name' };
-    // Фильтр по отделу применяется только для менеджеров, НЕ для админов
+    
     if (isManager && !isAdmin && employee?.department) {
       params.department = employee.department;
     }
@@ -429,7 +424,6 @@ function GoalsAndTasks() {
         (goal.evaluation_launched || pendingSelfGoalIds.has(goal.id)) &&
         ((goal.evaluations_pending ?? 0) > 0 || pendingSelfGoalIds.has(goal.id));
 
-      // Determine if current user is participant/owner of the goal
       const participantsList = Array.isArray(goal.participants_info) ? goal.participants_info : [];
       const isParticipant =
         Number(goal.employee) === Number(employee?.id) ||
@@ -438,10 +432,7 @@ function GoalsAndTasks() {
       if (!goal.is_completed) {
         buckets.active.push(goal);
       } else if (awaitingEvaluation && isParticipant) {
-        // Only show awaiting-evaluation goals that the current user is actually
-        // a participant of (owner or listed in participants_info). Other users
-        // (who may have evaluation notifications) will see those goals on the
-        // 360° page instead.
+        
         buckets.awaiting.push(goal);
       } else {
         buckets.completed.push(goal);
@@ -835,8 +826,7 @@ function GoalsAndTasks() {
         <header
           className="goal-header"
           onClick={(e) => {
-            // If the click originated from a button, link or an element with .icon-btn or .chip-action,
-            // do not toggle expansion (allow the element's handler to run).
+            
             const el = e.target;
             if (
               el.closest('button') ||
@@ -1305,7 +1295,7 @@ function GoalsAndTasks() {
                 name="task_link"
                 value={goalFormData.task_link}
                 onChange={handleGoalFormChange}
-                placeholder="https://..."
+                placeholder="https:
               />
             </label>
 

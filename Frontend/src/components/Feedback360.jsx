@@ -38,7 +38,7 @@ function Feedback360() {
 
     try {
       const [pendingRes, forMeRes, goalsRes, givenRes] = await Promise.all([
-        getPendingFeedback360(), // Это вернет уведомления
+        getPendingFeedback360(), 
         getFeedback360ForMe(),
         getGoals({ page_size: 200, is_completed: true, evaluation_launched: true }),
         getFeedback360List({ page_size: 200, ordering: '-created_at' }),

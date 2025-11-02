@@ -1,10 +1,3 @@
-"""
-Seed default hard/soft skill categories and questions for skill reviews.
-
-Usage:
-  python manage.py seed_skill_questions
-  python manage.py seed_skill_questions --reset  # deletes existing questions/categories first
-"""
 from django.core.management.base import BaseCommand
 from django.db import transaction
 

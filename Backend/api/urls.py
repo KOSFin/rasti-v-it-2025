@@ -19,7 +19,6 @@ router.register(r'goal-notifications', views.GoalEvaluationNotificationViewSet, 
 urlpatterns = [
     path('api/', include(router.urls)),
     
-    # Authentication
     path('api/auth/register/', auth_views.register, name='register'),
     path('api/auth/login/', auth_views.login, name='login'),
     path('api/auth/logout/', auth_views.logout, name='logout'),

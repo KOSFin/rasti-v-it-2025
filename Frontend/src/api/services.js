@@ -1,6 +1,5 @@
 import api from './axios';
 
-// Authentication
 export const login = (username, password) => 
   api.post('/api/auth/login/', { username, password });
 
@@ -16,7 +15,6 @@ export const getCurrentUser = () =>
 export const adminCreateEmployee = (payload) =>
   api.post('/api/auth/admin/create-employee/', payload);
 
-// Departments
 export const getDepartments = () => 
   api.get('/api/departments/');
 
@@ -32,7 +30,6 @@ export const updateDepartment = (id, data) =>
 export const deleteDepartment = (id) =>
   api.delete(`/api/departments/${id}/`);
 
-// Employees
 export const getEmployees = (params) => 
   api.get('/api/employees/', { params });
 
@@ -57,7 +54,6 @@ export const deleteEmployee = (id) =>
 export const resetEmployeePassword = (id) =>
   api.post(`/api/employees/${id}/generate_password/`);
 
-// Goals
 export const getGoals = (params) => 
   api.get('/api/goals/', { params });
 
@@ -76,7 +72,6 @@ export const deleteGoal = (id) =>
 export const completeGoal = (id, data) =>
   api.post(`/api/goals/${id}/complete/`, data);
 
-// Tasks
 export const getTasks = (params) => 
   api.get('/api/tasks/', { params });
 
@@ -92,7 +87,6 @@ export const updateTask = (id, data) =>
 export const deleteTask = (id) => 
   api.delete(`/api/tasks/${id}/`);
 
-// Self Assessments
 export const getSelfAssessments = (params) => 
   api.get('/api/self-assessments/', { params });
 
@@ -108,7 +102,6 @@ export const createSelfAssessment = (data) =>
 export const updateSelfAssessment = (id, data) => 
   api.put(`/api/self-assessments/${id}/`, data);
 
-// Feedback 360
 export const getFeedback360List = (params) => 
   api.get('/api/feedback-360/', { params });
 
@@ -121,7 +114,6 @@ export const getPendingFeedback360 = () =>
 export const createFeedback360 = (data) => 
   api.post('/api/feedback-360/', data);
 
-// Manager Reviews
 export const getManagerReviews = (params) => 
   api.get('/api/manager-reviews/', { params });
 
@@ -131,7 +123,6 @@ export const getMyTeam = () =>
 export const createManagerReview = (data) => 
   api.post('/api/manager-reviews/', data);
 
-// Potential Assessments
 export const getPotentialAssessments = (params) => 
   api.get('/api/potential-assessments/', { params });
 
@@ -141,7 +132,6 @@ export const getNineBoxMatrix = () =>
 export const createPotentialAssessment = (data) => 
   api.post('/api/potential-assessments/', data);
 
-// Final Reviews
 export const getFinalReviews = (params) => 
   api.get('/api/final-reviews/', { params });
 
@@ -157,7 +147,6 @@ export const calculateFinalScore = (id) =>
 export const getFinalReviewStatistics = () => 
   api.get('/api/final-reviews/statistics/');
 
-// Performance Review (360 + Self)
 export const initiateReviewCycle = (payload) =>
   api.post('/api/performance/review/initiate/', payload);
 
@@ -182,7 +171,6 @@ export const getSkillReviewManagerQueue = () =>
 export const submitSkillReviewFeedback = (data) =>
   api.post('/api/performance/review/manager/feedback/', data);
 
-// Task & Goal Review
 export const createReviewGoal = (data) =>
   api.post('/api/performance/task-goal/create/', data);
 
@@ -195,7 +183,6 @@ export const getTaskReviewForm = (token) =>
 export const submitTaskReview = (data) =>
   api.post('/api/performance/task-review/submit/', data);
 
-// Notifications
 export const getNotifications = (params) =>
   api.get('/api/performance/notifications/', { params });
 
@@ -205,7 +192,6 @@ export const markNotificationRead = (id) =>
 export const markAllNotificationsRead = () =>
   api.post('/api/performance/notifications/mark-all/');
 
-// Goal Evaluation Notifications
 export const getGoalNotifications = (params) =>
   api.get('/api/goal-notifications/', { params });
 

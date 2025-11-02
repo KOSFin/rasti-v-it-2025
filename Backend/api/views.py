@@ -69,7 +69,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def team(self, request, pk=None):
         employee = self.get_object()
-        # Логика получения команды сотрудника
         team = Employee.objects.filter(department=employee.department).exclude(id=employee.id)
         serializer = self.get_serializer(team, many=True)
         return Response(serializer.data)
@@ -105,7 +104,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             if request.method in ['PUT', 'PATCH'] and employee and employee.pk == current_employee.pk:
                 return True
             raise ValidationError({'detail': 'Недостаточно прав.'})
-        # Менеджеру разрешено редактировать сотрудников только своего отдела
         if employee and employee.department_id != current_employee.department_id and employee.pk != current_employee.pk:
             raise ValidationError({'detail': 'Можно редактировать только сотрудников своего отдела.'})
         return True
@@ -219,7 +217,6 @@ class GoalViewSet(viewsets.ModelViewSet):
         elif isinstance(raw, str):
             if not raw.strip():
                 return [] if not allow_none else []
-            # Попытка распарсить JSON-подобные строки
             if raw.strip().startswith('[') and raw.strip().endswith(']'):
                 raw = raw.strip()[1:-1]
             items = [item.strip() for item in raw.split(',') if item.strip()]
@@ -269,7 +266,6 @@ class GoalViewSet(viewsets.ModelViewSet):
                 Q(evaluation_notifications__recipient=employee)
             ).distinct()
 
-        # Сотрудник видит цели, в которых участвует, или которые он создал
         return queryset.filter(
             Q(goal_participants__employee=employee) |
             Q(created_by=employee) |
@@ -326,7 +322,6 @@ class GoalViewSet(viewsets.ModelViewSet):
 
         invalid = []
         if creator and creator.role == Employee.Role.MANAGER:
-            # Менеджер может добавлять участников только из своего отдела
             invalid = [
                 participant for participant in participants_ordered
                 if participant.department_id != creator.department_id
@@ -356,7 +351,6 @@ class GoalViewSet(viewsets.ModelViewSet):
             requires_evaluation=requires_evaluation
         )
 
-        # Синхронизируем участников
         GoalParticipant.objects.filter(goal=goal).delete()
         for participant in participants_ordered:
             GoalParticipant.objects.create(
@@ -419,7 +413,6 @@ class GoalViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        """Завершить цель и запустить оценку"""
         from django.utils import timezone
         
         goal = self.get_object()
@@ -430,11 +423,9 @@ class GoalViewSet(viewsets.ModelViewSet):
         except Employee.DoesNotExist:
             return Response({'error': 'Сотрудник не найден'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Проверяем, что пользователь имеет право завершить цель
         if not user.is_superuser and not goal.participants.filter(pk=employee.pk).exists():
             return Response({'error': 'Вы не можете завершить эту цель'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Проверяем, что все задачи выполнены
         uncompleted_tasks = goal.tasks.filter(is_completed=False).count()
         if uncompleted_tasks > 0:
             return Response(
@@ -442,16 +433,13 @@ class GoalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Получаем параметр запуска оценки
         launch_evaluation = request.data.get('launch_evaluation', goal.requires_evaluation)
         
-        # Завершаем цель
         goal.is_completed = True
         goal.completed_at = timezone.now()
         goal.evaluation_launched = bool(launch_evaluation)
         goal.save()
         
-        # Если нужно запустить оценку
         if launch_evaluation:
             participant_departments = list(
                 goal.participants.values_list('department_id', flat=True)
@@ -529,13 +517,11 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not completed_by and is_completed:
             completed_by = employee if employee else task.completed_by
         
-        # Если задача отмечается как выполненная
         if is_completed and not task.is_completed:
             serializer.save(
                 completed_at=timezone.now(),
                 completed_by=completed_by
             )
-        # Если задача отмечается как невыполненная
         elif not is_completed and task.is_completed:
             serializer.save(completed_at=None, completed_by=None)
         else:
@@ -570,11 +556,9 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def pending(self, request):
-        """Получить список целей, для которых нужно заполнить самооценку"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            # Находим завершенные цели с запущенной оценкой, для которых еще нет самооценки
             completed_goals = Goal.objects.filter(
                 goal_participants__employee=employee,
                 is_completed=True,
@@ -597,7 +581,6 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         if goal and not goal.participants.filter(pk=employee.pk).exists():
             raise ValidationError({'detail': 'Вы не участвуете в этой цели.'})
         
-        # Расчет баллов по логике из Excel
         data = serializer.validated_data
         collaboration_score = min(data['collaboration_quality'] // 4, 3)  # 0-10 -> 0-3
         satisfaction_score = min(data['satisfaction_score'] // 5, 2)  # 0-10 -> 0-2
@@ -629,14 +612,12 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            # Пользователь видит оценки, которые он дал
             return Feedback360.objects.filter(assessor=employee).select_related('goal', 'employee')
         except Employee.DoesNotExist:
             return Feedback360.objects.none()
     
     @action(detail=False, methods=['get'])
     def for_me(self, request):
-        """Получить все оценки 360 для текущего пользователя"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
@@ -648,11 +629,9 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def pending(self, request):
-        """Получить список уведомлений о необходимости оценить цели коллег"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
-            # Получаем непрочитанные и невыполненные уведомления
             notifications = GoalEvaluationNotification.objects.filter(
                 recipient=employee,
                 is_completed=False
@@ -666,7 +645,6 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         user = self.request.user
         employee = Employee.objects.get(user=user)
         
-        # Расчет баллов по логике из Excel
         data = serializer.validated_data
         results_score = min(data['results_achievement'] // 4, 3)  # 0-10 -> 0-3
         collaboration_score = min(data['collaboration_quality'] // 4, 3)  # 0-10 -> 0-3
@@ -674,7 +652,6 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
         total_score = results_score + collaboration_score
         serializer.save(assessor=employee, calculated_score=total_score)
         
-        # Отметить уведомление как выполненное
         goal = data['goal']
         try:
             notification = GoalEvaluationNotification.objects.get(
@@ -716,7 +693,6 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_team(self, request):
-        """Получить список сотрудников для оценки (для менеджера)"""
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
         if not employee or employee.role != Employee.Role.MANAGER:
@@ -741,7 +717,6 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
         if not user.is_superuser and employee.role != Employee.Role.MANAGER:
             raise PermissionError('Only managers can create reviews')
         
-        # Расчет баллов по сложной логике из Excel
         data = serializer.validated_data
         results_score = min(data['results_achievement'] // 4, 3)
         collaboration_score = min(data['collaboration_quality'] // 4, 3)
@@ -787,7 +762,6 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def nine_box_matrix(self, request):
-        """Получить данные для 9-Box матрицы"""
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
 
@@ -833,12 +807,10 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         
         data = serializer.validated_data
         
-        # Расчет баллов результативности (упрощенная логика)
         performance_score = 0
         if data.get('professional_qualities'):
             performance_score += len(data['professional_qualities'])
         
-        # Расчет баллов потенциала
         potential_score = 0
         if data.get('personal_qualities'):
             potential_score += len(data['personal_qualities'])
@@ -853,7 +825,6 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
             elif data.get('successor_readiness') == '3':
                 potential_score += 1
         
-        # Расчет риска ухода
         risk_score = data.get('retention_risk', 0)
         if risk_score <= 2:
             potential_score += 3
@@ -862,9 +833,8 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         elif risk_score <= 7:
             potential_score += 1
         
-        # Позиционирование в 9-Box
-        nine_box_x = min(performance_score // 2, 2)  # 0-2 для оси X
-        nine_box_y = min(potential_score // 5, 2)   # 0-2 для оси Y
+        nine_box_x = min(performance_score // 2, 2)
+        nine_box_y = min(potential_score // 5, 2)
         
         serializer.save(
             manager=employee if employee else None,
@@ -891,7 +861,6 @@ class GoalEvaluationNotificationViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
-        """Получить количество непрочитанных уведомлений"""
         user = self.request.user
         try:
             employee = Employee.objects.get(user=user)
@@ -905,7 +874,6 @@ class GoalEvaluationNotificationViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
-        """Отметить уведомление как прочитанное"""
         notification = self.get_object()
         notification.is_read = True
         notification.save()
@@ -940,11 +908,9 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def calculate_final_score(self, request, pk=None):
-        """Рассчитать итоговый балл для отзыва"""
         final_review = self.get_object()
         employee_target = final_review.employee
         
-        # Расчет итоговых баллов
         self_assessments = SelfAssessment.objects.filter(employee=employee_target)
         feedbacks = Feedback360.objects.filter(employee=employee_target)
         manager_reviews = ManagerReview.objects.filter(employee=employee_target)
@@ -957,7 +923,6 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
         
         total_score = self_score + feedback_score + manager_score + potential_score
         
-        # Определение рекомендации по salary increase
         if total_score <= 12:
             salary_recommendation = 'exclude'
         elif total_score <= 15:
@@ -978,7 +943,6 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Получить статистику по всем отзывам"""
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
 

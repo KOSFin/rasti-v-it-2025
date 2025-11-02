@@ -1,4 +1,3 @@
-"""Serializers for the Performance Review API surface."""
 
 from datetime import date
 

@@ -222,7 +222,6 @@ function Reports() {
     const completedTasks = empTasks.filter((t) => t.is_completed).length;
     const totalTasksEmp = empTasks.length;
 
-    // team averages for simple comparison
     const teamAvgGoals = Object.values(metrics.goalMetricsByEmployee).reduce((acc, it) => acc + it.total, 0) / Math.max(1, Object.values(metrics.goalMetricsByEmployee).length);
     const teamAvgCompletedTasks = Object.values(metrics.taskMetricsByEmployee).reduce((acc, it) => acc + (it.completed || 0), 0) / Math.max(1, Object.values(metrics.taskMetricsByEmployee).length);
 

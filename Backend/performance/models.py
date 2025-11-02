@@ -1,4 +1,3 @@
-"""Data models for the Performance Review domain."""
 
 import uuid
 from datetime import timedelta
@@ -9,13 +8,11 @@ from django.utils import timezone
 
 
 def default_token_expiry():
-    """Provide a default expiration timestamp for one-time review links."""
 
     return timezone.now() + timedelta(hours=24)
 
 
 class TimeStampedModel(models.Model):
-    """Abstract base model that adds created/updated timestamps."""
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -25,7 +22,6 @@ class TimeStampedModel(models.Model):
 
 
 class Employer(TimeStampedModel):
-    """Stores the core profile data for each employee under review."""
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -45,7 +41,7 @@ class Employer(TimeStampedModel):
     class Meta:
         ordering = ["fio"]
 
-    def __str__(self) -> str:  # pragma: no cover - human readable output only
+    def __str__(self) -> str:
         return f"{self.fio} ({self.position})"
 
     @property
@@ -55,7 +51,6 @@ class Employer(TimeStampedModel):
 
 
 class ReviewPeriod(TimeStampedModel):
-    """Represents a predefined review checkpoint in months with optional date window."""
 
     month_period = models.PositiveIntegerField(help_text="Number of months since the employment date")
     name = models.CharField(max_length=100, default="", blank=True)
@@ -67,13 +62,12 @@ class ReviewPeriod(TimeStampedModel):
         ordering = ["month_period"]
         unique_together = ("month_period", "name")
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __str__(self) -> str:
         suffix = self.name or f"{self.month_period}m"
         return f"ReviewPeriod {suffix}"
 
 
 class SkillCategory(TimeStampedModel):
-    """Hard or soft skill category grouping review questions."""
 
     HARD = "hard"
     SOFT = "soft"
@@ -90,12 +84,11 @@ class SkillCategory(TimeStampedModel):
         unique_together = ("skill_type", "name")
         ordering = ["skill_type", "name"]
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __str__(self) -> str:
         return f"{self.get_skill_type_display()}: {self.name}"
 
 
 class SkillQuestion(TimeStampedModel):
-    """Individual review question bound to a hard/soft skill category."""
 
     category = models.ForeignKey(SkillCategory, on_delete=models.CASCADE, related_name="questions")
     question_text = models.TextField()
@@ -106,12 +99,11 @@ class SkillQuestion(TimeStampedModel):
     class Meta:
         ordering = ["category", "created_at"]
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __str__(self) -> str:
         return f"{self.category.name}: {self.question_text[:80]}"
 
 
 class ReviewLog(TimeStampedModel):
-    """Audit trail for review invitations and token-based survey access."""
 
     STATUS_PENDING = "pending"
     STATUS_COMPLETED = "completed"
@@ -180,7 +172,6 @@ class ReviewLog(TimeStampedModel):
 
 
 class ReviewAnswer(TimeStampedModel):
-    """Centralised storage of answers for self and peer skill reviews."""
 
     employer = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="answers_as_employee")
     respondent = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="answers_as_respondent")
@@ -202,7 +193,6 @@ class ReviewAnswer(TimeStampedModel):
 
 
 class ReviewQuestion(TimeStampedModel):
-    """Generic question bank used for task/goal review contexts."""
 
     CONTEXT_CHOICES = (
         (ReviewLog.CONTEXT_TASK, "Task"),
@@ -222,7 +212,6 @@ class ReviewQuestion(TimeStampedModel):
 
 
 class ReviewGoal(TimeStampedModel):
-    """Strategic goal that groups individual tasks for an employer."""
 
     STATUS_CHOICES = (
         ("active", "Active"),
@@ -243,7 +232,6 @@ class ReviewGoal(TimeStampedModel):
 
 
 class ReviewTask(TimeStampedModel):
-    """Atomic task linked to a goal and used as a review trigger."""
 
     STATUS_CHOICES = (
         ("active", "Active"),
@@ -265,7 +253,6 @@ class ReviewTask(TimeStampedModel):
 
 
 class ReviewSchedule(TimeStampedModel):
-    """Holds planned review windows for tasks, goals or skills."""
 
     STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -298,7 +285,6 @@ class ReviewSchedule(TimeStampedModel):
 
 
 class TaskReviewAnswer(TimeStampedModel):
-    """Stores self and peer answers for task/goal review questionnaires."""
 
     task = models.ForeignKey(ReviewTask, on_delete=models.CASCADE, related_name="answers")
     employer = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="task_reviews_as_employee")
@@ -315,7 +301,6 @@ class TaskReviewAnswer(TimeStampedModel):
 
 
 class TeamRelation(TimeStampedModel):
-    """Defines peer relationships used to assign reviewers for task cycles."""
 
     employer = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="team_memberships")
     peer = models.ForeignKey(Employer, on_delete=models.CASCADE, related_name="peer_memberships")
@@ -328,7 +313,6 @@ class TeamRelation(TimeStampedModel):
 
 
 class SiteNotification(TimeStampedModel):
-    """Stores in-product notifications delivered to respondents instead of emails."""
 
     CONTEXT_GENERAL = "general"
 
@@ -369,7 +353,6 @@ class SiteNotification(TimeStampedModel):
 
 
 class SkillReviewFeedback(TimeStampedModel):
-    """Manager feedback provided after a skill review submission."""
 
     log = models.OneToOneField(
         ReviewLog,

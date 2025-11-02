@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.settings import api_settings
 try:
     from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-except ModuleNotFoundError:  # blacklist app can be disabled in settings
+except ModuleNotFoundError:
     BlacklistedToken = None
     OutstandingToken = None
 
@@ -28,7 +28,6 @@ from performance.services import ensure_initial_self_review, sync_employer_from_
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
-    """Регистрация нового пользователя"""
     try:
         username = request.data.get('username')
         password = request.data.get('password')
@@ -56,7 +55,6 @@ def register(request):
             last_name=last_name
         )
         
-        # Создаем профиль сотрудника
         department_id = request.data.get('department')
         department = None
         if department_id:
@@ -126,7 +124,6 @@ def register(request):
                     'employer_id': employer.id,
                 }
         
-        # Генерируем токены
         refresh = RefreshToken.for_user(user)
         
         return Response({
@@ -148,7 +145,6 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    """Вход пользователя"""
     username = request.data.get('username')
     password = request.data.get('password')
     
@@ -189,11 +185,8 @@ def login(request):
             if pending_review:
                 employee_data['pending_self_review'] = pending_review
         except Exception:
-            # Логируем ошибку, но не прерываем процесс входа
-            # Это может происходить если, например, у пользователя нет email
             pass
     except Employee.DoesNotExist:
-        # Пользователь может войти без связанного профиля сотрудника
         pass
     
     return Response({
@@ -209,7 +202,6 @@ from django.db import IntegrityError
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    """Выход пользователя"""
     try:
         refresh_token = request.data.get('refresh')
         if refresh_token:
@@ -236,7 +228,6 @@ def logout(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
-    """Получение текущего пользователя"""
     employee_data = None
     try:
         employee = Employee.objects.get(user=request.user)
@@ -258,11 +249,8 @@ def current_user(request):
             if pending_review:
                 employee_data['pending_self_review'] = pending_review
         except Exception:
-            # Логируем ошибку, но не прерываем процесс получения данных
-            # Это может происходить если, например, у пользователя нет email
             pass
     except Employee.DoesNotExist:
-        # Пользователь может существовать без связанного профиля сотрудника
         pass
     
     return Response({

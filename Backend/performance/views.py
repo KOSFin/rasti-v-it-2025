@@ -1,4 +1,3 @@
-"""REST endpoints for the Performance Review module."""
 
 from datetime import date, timedelta
 
@@ -53,7 +52,6 @@ def _service_error_response(error: ServiceError) -> Response:
 
 
 class ReviewCycleInitiateView(APIView):
-    """API #1 — initiate performance review cycles."""
 
     permission_classes = [permissions.IsAdminUser]
 
@@ -66,7 +64,6 @@ class ReviewCycleInitiateView(APIView):
 
 
 class ReviewFormView(APIView):
-    """API #3 — fetch review form via one-time token."""
 
     permission_classes = [permissions.AllowAny]
 
@@ -85,7 +82,6 @@ class ReviewFormView(APIView):
 
 
 class ReviewSubmitView(APIView):
-    """API #2 — accept answers for a review cycle."""
 
     permission_classes = [permissions.AllowAny]
 
@@ -105,7 +101,6 @@ class ReviewSubmitView(APIView):
 
 
 class ReviewAnalyticsView(APIView):
-    """API #4 — aggregated analytics for an employer."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -282,7 +277,6 @@ class SkillReviewFeedbackView(APIView):
 
 
 class AdaptationIndexView(APIView):
-    """API #5 — calculate adaptation index."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -306,7 +300,6 @@ class AdaptationIndexView(APIView):
 
 
 class TaskGoalCreateView(APIView):
-    """Task/Goal API #1 — create goal and tasks."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -358,7 +351,6 @@ class TaskGoalCreateView(APIView):
 
 
 class TaskReviewTriggerView(APIView):
-    """Task/Goal API #2 — trigger task review cycles."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -374,7 +366,6 @@ class TaskReviewTriggerView(APIView):
 
 
 class TaskReviewFormView(APIView):
-    """Task/Goal API #3 — fetch task review form."""
 
     permission_classes = [permissions.AllowAny]
 
@@ -393,7 +384,6 @@ class TaskReviewFormView(APIView):
 
 
 class TaskReviewSubmitView(APIView):
-    """Task/Goal API #4 — submit task review answers."""
 
     permission_classes = [permissions.AllowAny]
 

@@ -1,4 +1,3 @@
-"""Domain services powering Performance Review workflows."""
 
 from __future__ import annotations
 
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
 
 
 class ServiceError(Exception):
-    """Domain-level exception converted to API responses in views."""
 
     def __init__(self, message: str, *, code: str = "error", status: int = 400) -> None:
         super().__init__(message)
@@ -73,7 +71,6 @@ class ReviewCycleResult:
 
 
 def add_months(base: date, months: int) -> date:
-    """Return a new date shifted by ``months`` preserving day when possible."""
 
     if months == 0:
         return base
@@ -87,7 +84,6 @@ def add_months(base: date, months: int) -> date:
 def ensure_default_skill_periods(
     defaults: Iterable[Tuple[int, str]] = DEFAULT_SKILL_PERIODS,
 ) -> List[ReviewPeriod]:
-    """Ensure baseline ``ReviewPeriod`` instances exist and return them ordered."""
 
     ensured_ids: List[int] = []
     for month_period, name in defaults:
@@ -106,7 +102,6 @@ def ensure_default_skill_periods(
 
 
 def _activation_start_date(employer: Employer) -> Optional[date]:
-    """Determine the reference start date for review timelines."""
 
     if employer.activation_date:
         return employer.activation_date
@@ -120,7 +115,6 @@ def _period_due_date(
     period: Optional[ReviewPeriod],
     metadata: Optional[Dict],
 ) -> date:
-    """Resolve the logical due date for the provided period."""
 
     today = timezone.now().date()
     metadata = metadata or {}
@@ -145,7 +139,6 @@ def _period_due_date(
 
 
 def months_between(start: date, end: date) -> int:
-    """Return the full month difference between two dates."""
 
     if end < start:
         return -1
@@ -381,14 +374,12 @@ def _create_question_placeholders(
 
 
 def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
-    """Guarantee that a self-review link exists for the employer's zero period."""
 
     questions = list(
         SkillQuestion.objects.filter(is_active=True)
         .select_related("category")
         .order_by("category__skill_type", "category__name", "id")
     )
-    # Even if there are no questions yet, we still create a log so the user can start when ready.
 
     zero_period = _ensure_zero_period()
 
@@ -409,7 +400,6 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
     )
 
     if existing_log and existing_log.status in [ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL]:
-        # Ensure the token remains valid through the availability window
         try:
             available_since = (existing_log.metadata or {}).get("available_since")
             if available_since:
@@ -453,7 +443,6 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
             "available_since": base_date.isoformat(),
         },
     )
-    # Extend expiry to cover the availability window + 1 day
     window_days = SKILL_REVIEW_MISS_GRACE_DAYS + 1
     review_log.expires_at = timezone.now() + timedelta(days=window_days)
     review_log.status = ReviewLog.STATUS_PENDING
@@ -463,7 +452,6 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
 
 @transaction.atomic
 def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
-    """Create grade=0 placeholders and tokens for self and peer reviews."""
 
     result = ReviewCycleResult()
     questions = list(SkillQuestion.objects.filter(is_active=True).select_related("category"))
@@ -945,7 +933,6 @@ def _interpret_zone(color_zone: str) -> str:
     }[color_zone]
 
 
-# The following helpers implement the extended Task & Goal review workflow.
 
 
 def create_goal_with_tasks(
@@ -1372,19 +1359,18 @@ def _log_completed_at(log: ReviewLog) -> Optional[datetime]:
 def _employee_for_employer(employer: Employer) -> Optional["Employee"]:
     if employer.user_id is None:
         return None
-    from api.models import Employee  # local import to avoid circular dependencies
+    from api.models import Employee
 
     return Employee.objects.select_related("department").filter(user=employer.user).first()
 
 
 def _managers_for_employer(employer: Employer) -> List[Employer]:
-    """Return manager and partner employers overseeing the provided employee."""
 
     employee_profile = _employee_for_employer(employer)
     if not employee_profile:
         return []
 
-    from api.models import Employee  # local import to avoid circular dependencies
+    from api.models import Employee
 
     manager_qs = Employee.objects.filter(
         Q(role=Employee.Role.MANAGER)
@@ -1415,7 +1401,7 @@ def _team_employers_for_manager(manager: Employer) -> List[int]:
     if not employee_profile:
         return []
 
-    from api.models import Employee  # local import
+    from api.models import Employee
 
     if manager.user and manager.user.is_superuser:
         return list(Employer.objects.values_list("id", flat=True))
@@ -1431,13 +1417,11 @@ def _team_employers_for_manager(manager: Employer) -> List[int]:
 
 
 def manager_team_employer_ids(manager: Employer) -> List[int]:
-    """Return employer identifiers available to the given manager."""
 
     return _team_employers_for_manager(manager)
 
 
 def _notify_feedback_required(log: ReviewLog, managers: Iterable[Employer]) -> int:
-    """Fan out notifications requesting feedback from leadership."""
 
     created = 0
     period_label = _period_label(log.period) if log.period else ""
@@ -1476,11 +1460,9 @@ def _notify_feedback_required(log: ReviewLog, managers: Iterable[Employer]) -> i
 
 
 def skill_review_overview(employer: Employer) -> Dict:
-    """Return combined timeline and summary metrics for an employer's skill reviews."""
 
     ensure_default_skill_periods()
     
-    # Ensure initial self-review exists for period "Start"
     ensure_initial_self_review(employer)
     
     today = timezone.now().date()
@@ -1550,7 +1532,6 @@ def skill_review_overview(employer: Employer) -> Dict:
     for period in periods:
         log = logs_by_period.get(period.id)
 
-        # On-demand ensure the Start period self-review exists and is usable
         if log is None and period.month_period == 0:
             try:
                 created_log = ensure_initial_self_review(employer)
@@ -1589,7 +1570,6 @@ def skill_review_overview(employer: Employer) -> Dict:
         except (TypeError, ValueError):
             available_from_date = due_date
 
-        # Availability window: test is available for SKILL_REVIEW_MISS_GRACE_DAYS from available_from
         available_until_date = (
             datetime.fromisoformat(available_from_iso).date() + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
             if available_from_iso
@@ -1598,7 +1578,7 @@ def skill_review_overview(employer: Employer) -> Dict:
         days_left = max((available_until_date - today).days, 0)
         days_past_due = (today - available_until_date).days if today > available_until_date else 0
         overdue_flag = today > available_until_date
-        miss_deadline = available_until_date  # compatibility var name
+        miss_deadline = available_until_date
 
         feedback_obj = getattr(log, "feedback", None) if log else None
         if feedback_obj:
@@ -1675,7 +1655,6 @@ def skill_review_overview(employer: Employer) -> Dict:
             overdue_delay_days += delay_days
             penalty = 10.0
             overdue_delay = delay_days
-        # No hard "missed" cutoff now; overdue persists after availability window
         elif status == "expired":
             penalty = 25
         elif status == "awaiting_feedback" and waiting_days > 21:
@@ -1779,7 +1758,7 @@ def skill_review_overview(employer: Employer) -> Dict:
 
     employee_profile = _employee_for_employer(employer)
     if employee_profile:
-        from api.models import Feedback360, ManagerReview, SelfAssessment  # local import
+        from api.models import Feedback360, ManagerReview, SelfAssessment
 
         goal_self_scores: List[float] = []
         goal_peer_scores: List[float] = []
@@ -1990,7 +1969,6 @@ def skill_review_overview(employer: Employer) -> Dict:
 
 
 def sync_employer_from_employee(employee: "Employee") -> Optional[Employer]:
-    """Synchronise performance Employer profile with core Employee record."""
 
     if employee is None:
         return None
