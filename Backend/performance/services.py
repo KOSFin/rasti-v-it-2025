@@ -1683,7 +1683,7 @@ def skill_review_overview(employer: Employer) -> Dict:
 
         punctuality_penalty += penalty
 
-    can_start = token is not None and status in {"available", "open", "due_today", "overdue"}
+        can_start = token is not None and status in {"available", "open", "due_today", "overdue"}
 
         entry = {
             "period_id": period.id,
