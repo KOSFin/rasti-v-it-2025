@@ -13,7 +13,7 @@ import {
   createTask,
   updateTask,
   deleteTask,
-  getEmployees,
+  getAllEmployees,
   getPendingSelfAssessments,
   createSelfAssessment,
 } from '../api/services';
@@ -227,8 +227,8 @@ function GoalsAndTasks() {
     }
 
     try {
-      const response = await getEmployees(params);
-      setEmployees(extractResults(response));
+  const list = await getAllEmployees(params);
+  setEmployees(list || []);
     } catch (err) {
       console.error('Не удалось загрузить сотрудников', err);
       setEmployees([]);

@@ -231,10 +231,65 @@ function SkillAssessments() {
     setFeedbackSubmitting(true);
     setFeedbackError('');
     try {
-      await submitSkillReviewFeedback({
+      const response = await submitSkillReviewFeedback({
         log_id: feedbackModal.logId,
         message: feedbackModal.message.trim(),
       });
+
+      const payload = response?.data || {};
+      const logId = payload?.log_id;
+      if (logId != null) {
+        setManagerQueue((prev) => {
+          const nextItems = prev.items.map((item) => {
+            if (Number(item.log_id) === Number(logId)) {
+              return {
+                ...item,
+                status: payload.status ?? item.status,
+                feedback: payload.feedback ?? item.feedback,
+              };
+            }
+            return item;
+          });
+
+          const wasAwaiting = prev.items.some(
+            (item) => Number(item.log_id) === Number(logId) && item.status === 'awaiting_feedback'
+          );
+
+          const nextStats = { ...prev.stats };
+          if (wasAwaiting && payload.status === 'completed') {
+            nextStats.awaiting_feedback = Math.max((nextStats.awaiting_feedback || 0) - 1, 0);
+            nextStats.completed = (nextStats.completed || 0) + 1;
+          }
+
+          return {
+            items: nextItems,
+            stats: nextStats,
+          };
+        });
+
+        setOverview((prev) => {
+          if (!prev || !Array.isArray(prev.timeline)) {
+            return prev;
+          }
+
+          const nextTimeline = prev.timeline.map((entry) => {
+            if (Number(entry.log_id) === Number(logId)) {
+              return {
+                ...entry,
+                status: payload.status ?? entry.status,
+                feedback: payload.feedback ?? entry.feedback,
+              };
+            }
+            return entry;
+          });
+
+          return {
+            ...prev,
+            timeline: nextTimeline,
+          };
+        });
+      }
+
       closeFeedbackModal();
       await Promise.all([loadManagerQueue(), loadOverview()]);
     } catch (err) {

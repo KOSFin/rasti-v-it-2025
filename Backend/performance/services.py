@@ -1665,6 +1665,7 @@ def skill_review_overview(employer: Employer) -> Dict:
         can_start = token is not None and status in {"available", "open", "due_today", "overdue"}
 
         entry = {
+            "log_id": log.id if log else None,
             "period_id": period.id,
             "period_label": _period_label(period),
             "month_offset": period.month_period,

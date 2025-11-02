@@ -1,5 +1,51 @@
 import api from './axios';
 
+const extractListPayload = (data) => {
+  if (!data) {
+    return [];
+  }
+
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return Array.isArray(data?.data?.results) ? data.data.results : data?.results || [];
+};
+
+const collectPaginatedResults = async (path, initialParams = {}) => {
+  let url = path;
+  let params = { ...initialParams };
+  const aggregated = [];
+  let lastResponseData = null;
+
+  while (url) {
+    const hasParams = params && Object.keys(params).length > 0;
+    const response = await api.get(url, hasParams ? { params } : undefined);
+    const payload = response?.data;
+    lastResponseData = payload;
+    aggregated.push(...extractListPayload(payload));
+
+    const nextUrl = payload?.next;
+    if (!nextUrl) {
+      break;
+    }
+
+    url = nextUrl;
+    params = undefined;
+  }
+
+  const count = typeof lastResponseData?.count === 'number' ? lastResponseData.count : aggregated.length;
+
+  return {
+    items: aggregated,
+    count,
+  };
+};
+
 export const login = (username, password) => 
   api.post('/api/auth/login/', { username, password });
 
@@ -32,6 +78,11 @@ export const deleteDepartment = (id) =>
 
 export const getEmployees = (params) => 
   api.get('/api/employees/', { params });
+
+export const getAllEmployees = async (params) => {
+  const { items } = await collectPaginatedResults('/api/employees/', params);
+  return items;
+};
 
 export const getEmployee = (id) => 
   api.get(`/api/employees/${id}/`);

@@ -14,9 +14,9 @@ import {
 import {
   adminCreateEmployee,
   deleteEmployee,
+  getAllEmployees,
   getDepartments,
   getEmployee,
-  getEmployees,
   resetEmployeePassword,
   updateEmployee,
 } from '../api/services';
@@ -68,20 +68,16 @@ function AdminUsers() {
   const loadEmployees = async () => {
     setLoading(true);
     try {
-      const [employeesRes, departmentsRes] = await Promise.all([
-        getEmployees({ page_size: 500, ordering: 'user__last_name' }),
+      const [employeesList, departmentsRes] = await Promise.all([
+        getAllEmployees({ ordering: 'user__last_name' }),
         getDepartments(),
       ]);
-
-      const employeesData = Array.isArray(employeesRes.data?.results)
-        ? employeesRes.data.results
-        : employeesRes.data;
 
       const departmentsData = Array.isArray(departmentsRes.data?.results)
         ? departmentsRes.data.results
         : departmentsRes.data;
 
-      setEmployees(employeesData || []);
+      setEmployees(employeesList || []);
       setDepartments(departmentsData || []);
       setError('');
     } catch (err) {

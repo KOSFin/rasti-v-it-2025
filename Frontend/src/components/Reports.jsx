@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fi';
 import {
   getDepartments,
-  getEmployees,
+  getAllEmployees,
   getFinalReviews,
   getGoals,
   getManagerReviews,
@@ -71,8 +71,8 @@ function Reports() {
     }
 
     try {
-      const [employeesRes, goalsRes, tasksRes, potentialRes, reviewsRes, finalRes] = await Promise.all([
-        getEmployees(params),
+      const [employeesList, goalsRes, tasksRes, potentialRes, reviewsRes, finalRes] = await Promise.all([
+        getAllEmployees(params),
         getGoals({ page_size: 500, ordering: '-created_at' }),
         getTasks({ page_size: 1000 }),
         getPotentialAssessments({ page_size: 500 }),
@@ -80,7 +80,7 @@ function Reports() {
         getFinalReviews({ page_size: 500 }),
       ]);
 
-      setMembers(extractResults(employeesRes));
+      setMembers(employeesList || []);
       setGoals(extractResults(goalsRes));
       setTasks(extractResults(tasksRes));
       setPotentialAssessments(extractResults(potentialRes));

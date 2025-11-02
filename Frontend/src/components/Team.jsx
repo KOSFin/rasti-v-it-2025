@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fi';
 import {
   getDepartments,
-  getEmployees,
+  getAllEmployees,
   getGoals,
   getTasks,
 } from '../api/services';
@@ -68,13 +68,13 @@ function Team() {
     }
 
     try {
-      const [employeesRes, goalsRes, tasksRes] = await Promise.all([
-        getEmployees(params),
+      const [employeesList, goalsRes, tasksRes] = await Promise.all([
+        getAllEmployees(params),
         getGoals({ page_size: 500, ordering: '-created_at' }),
         getTasks({ page_size: 1000 }),
       ]);
 
-      setMembers(extractResults(employeesRes));
+      setMembers(employeesList || []);
       setGoals(extractResults(goalsRes));
       setTasks(extractResults(tasksRes));
     } catch (err) {
