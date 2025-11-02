@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getAdaptationIndex, getReviewAnalytics } from '../api/services';
+import { getAdaptationIndex, getReviewAnalytics, getSkillReviewOverview } from '../api/services';
 import { useAuth } from '../contexts/AuthContext';
 import './Dashboard.css';
 
@@ -15,8 +15,40 @@ function Dashboard() {
   const [periodId, setPeriodId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [adaptation, setAdaptation] = useState(null);
+  const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [overviewError, setOverviewError] = useState('');
+
+  useEffect(() => {
+    if (!employee?.employer_id && !employee?.id) {
+      return;
+    }
+
+    let ignore = false;
+
+    const loadOverview = async () => {
+      setOverviewError('');
+      try {
+        const params = employee?.employer_id ? { employer_id: employee.employer_id } : {};
+        const response = await getSkillReviewOverview(params);
+        if (!ignore) {
+          setOverview(response.data);
+        }
+      } catch (fetchError) {
+        console.error('Не удалось загрузить общий обзор по самооценкам', fetchError);
+        if (!ignore) {
+          setOverviewError('Не удалось загрузить сводные метрики.');
+        }
+      }
+    };
+
+    loadOverview();
+
+    return () => {
+      ignore = true;
+    };
+  }, [employee?.employer_id, employee?.id]);
 
   useEffect(() => {
     if (!employee?.id) {
@@ -69,12 +101,13 @@ function Dashboard() {
   }, [employee?.id, skillsType, periodId]);
 
   const periods = useMemo(() => {
-    if (!analytics?.analytics) {
+    const sourceAnalytics = analytics?.analytics || overview?.analytics?.analytics;
+    if (!sourceAnalytics) {
       return [];
     }
     const ordered = [];
     const seen = new Set();
-    analytics.analytics.forEach((category) => {
+    sourceAnalytics.forEach((category) => {
       category.periods.forEach((item) => {
         const key = item.period_id ?? item.period;
         if (seen.has(key)) {
@@ -85,9 +118,36 @@ function Dashboard() {
       });
     });
     return ordered;
-  }, [analytics]);
+  }, [analytics, overview]);
 
-  const categories = analytics?.analytics || [];
+  const categories = analytics?.analytics || overview?.analytics?.analytics || [];
+
+  const summary = overview?.summary || {};
+  const nextReview = overview?.next_review;
+  const activeReview = overview?.active_review;
+  const timeline = overview?.timeline || [];
+
+  const overallScore = summary.self_average != null && summary.peer_average != null
+    ? ((summary.self_average + summary.peer_average) / 2).toFixed(1)
+    : '—';
+
+  const growthValue = summary.last_growth != null
+    ? (summary.last_growth >= 0 ? `+${summary.last_growth.toFixed(1)}` : summary.last_growth.toFixed(1))
+    : '—';
+
+  const efficiencyValue = summary.performance_index != null
+    ? `${summary.performance_index.toFixed(1)}%`
+    : summary.reviews_completion_rate != null
+      ? `${summary.reviews_completion_rate.toFixed(1)}%`
+      : '—';
+
+  const completedTests = summary.tests_completed ?? 0;
+  const totalTests = summary.tests_total ?? timeline.length;
+  const criteriaLabel = totalTests ? `${completedTests}/${totalTests}` : '0/0';
+
+  const adaptationIndexValue = summary.adaptation_index ?? adaptation?.AdaptationIndex;
+  const adaptationZone = summary.adaptation_zone || adaptation?.color_zone;
+  const adaptationInterpretation = summary.adaptation_interpretation || adaptation?.interpretation;
 
   if (loading) {
     return (
@@ -108,7 +168,7 @@ function Dashboard() {
             <p className="hero-overline">Добро пожаловать, {user?.first_name}</p>
             <h1>Performance Review 360°</h1>
             <p className="hero-subtitle">
-              {employee?.position || 'Сотрудник'} · {employee?.fio || employee?.full_name}
+              {employee?.position_title || employee?.position_name || 'Сотрудник'} · {employee?.fio || employee?.full_name}
             </p>
           </div>
           <div className="filters">
@@ -143,29 +203,63 @@ function Dashboard() {
 
         <div className="hero-metrics">
           <div>
-            <span className="metric-label">Индекс адаптации</span>
-            <span className="metric-value accent">{adaptation?.AdaptationIndex?.toFixed?.(1) ?? '—'}</span>
+            <span className="metric-label">Общий балл</span>
+            <span className="metric-value accent">{overallScore}</span>
+            <span className="metric-hint">Среднее Self + Peer</span>
           </div>
           <div>
-            <span className="metric-label">Средняя самооценка</span>
-            <span className="metric-value">{analytics?.averages?.overall_self?.toFixed?.(1) ?? '0.0'}</span>
+            <span className="metric-label">Рост за период</span>
+            <span className="metric-value success">{growthValue}</span>
+            <span className="metric-hint">Последняя динамика</span>
           </div>
           <div>
-            <span className="metric-label">Средняя оценка коллег</span>
-            <span className="metric-value">{analytics?.averages?.overall_peer?.toFixed?.(1) ?? '0.0'}</span>
+            <span className="metric-label">Общая эффективность</span>
+            <span className="metric-value">{efficiencyValue}</span>
+            <span className="metric-hint">Индекс результативности</span>
           </div>
           <div>
-            <span className="metric-label">Δ восприятия</span>
-            <span className="metric-value">{analytics?.averages?.delta?.toFixed?.(1) ?? '0.0'}</span>
+            <span className="metric-label">Тестов завершено</span>
+            <span className="metric-value">{criteriaLabel}</span>
+            <span className="metric-hint">Самооценки / план</span>
           </div>
         </div>
       </section>
 
+      {overviewError && <div className="dashboard-error subtle">{overviewError}</div>}
+
+      {nextReview && (
+        <section className="summary-strip">
+          <article className="summary-card">
+            <h3>Ближайший тест</h3>
+            <p className="summary-main">{nextReview.period_label}</p>
+            <p className="summary-meta">
+              Через {Math.max(nextReview.days_left ?? 0, 0)} дн. · {new Date(nextReview.due_date).toLocaleDateString('ru-RU')}
+            </p>
+          </article>
+          {activeReview && (
+            <article className="summary-card highlight">
+              <h3>Доступно к заполнению</h3>
+              <p className="summary-main">{activeReview.period_label}</p>
+              <p className="summary-meta">
+                Статус: {statusLabel(activeReview.status)} · Срок до {new Date(activeReview.due_date).toLocaleDateString('ru-RU')}
+              </p>
+            </article>
+          )}
+          <article className="summary-card">
+            <h3>Адаптация</h3>
+            <p className={`summary-main zone-${adaptationZone || 'neutral'}`}>
+              {adaptationIndexValue != null ? adaptationIndexValue.toFixed?.(1) ?? adaptationIndexValue : '—'}
+            </p>
+            <p className="summary-meta">{adaptationInterpretation || 'Недостаточно данных'}</p>
+          </article>
+        </section>
+      )}
+
       <section className="insights-grid">
-        <article className={`insight-card zone-${adaptation?.color_zone || 'neutral'}`}>
-          <h3>Интерпретация зоны</h3>
-          <p className="insight-number">{(adaptation?.AdaptationIndex ?? 0).toFixed(1)}</p>
-          <p className="insight-meta">{adaptation?.interpretation || 'Недостаточно данных для интерпретации.'}</p>
+        <article className={`insight-card zone-${adaptationZone || 'neutral'}`}>
+          <h3>Индекс адаптации</h3>
+          <p className="insight-number">{adaptationIndexValue != null ? adaptationIndexValue.toFixed?.(1) ?? adaptationIndexValue : '—'}</p>
+          <p className="insight-meta">{adaptationInterpretation || 'Недостаточно данных для интерпретации.'}</p>
         </article>
         <article className="insight-card">
           <h3>Средняя самооценка</h3>
@@ -245,6 +339,25 @@ function formatTrend(value) {
   }
   const signed = value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1);
   return `${signed}`;
+}
+
+function statusLabel(status) {
+  switch (status) {
+    case 'completed':
+      return 'Завершено';
+    case 'open':
+      return 'Открыто';
+    case 'overdue':
+      return 'Просрочено';
+    case 'due_today':
+      return 'Сдать сегодня';
+    case 'expired':
+      return 'Ссылка истекла';
+    case 'scheduled':
+      return 'Запланировано';
+    default:
+      return 'В ожидании';
+  }
 }
 
 export default Dashboard;

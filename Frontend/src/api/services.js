@@ -173,6 +173,9 @@ export const getReviewAnalytics = (params) =>
 export const getAdaptationIndex = (params) =>
   api.get('/api/performance/review/adaptation-index/', { params });
 
+export const getSkillReviewOverview = (params) =>
+  api.get('/api/performance/review/overview/', { params });
+
 // Task & Goal Review
 export const createReviewGoal = (data) =>
   api.post('/api/performance/task-goal/create/', data);

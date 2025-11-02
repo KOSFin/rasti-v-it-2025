@@ -305,6 +305,68 @@ table tr:hover {
   background-color: #f9f9f9;
 }
 
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.insight-card {
+  background: white;
+  border-radius: 16px;
+  padding: 18px 20px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.insight-card h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7280;
+}
+
+.insight-number {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.insight-number.warning {
+  color: #b45309;
+}
+
+.insight-number.accent {
+  color: #1d4ed8;
+}
+
+.insight-number.success {
+  color: #047857;
+}
+
+.insight-card.zone-blue {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.insight-card.zone-green {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.insight-card.zone-yellow {
+  border-color: #fef08a;
+  background: #fefce8;
+}
+
+.insight-card.zone-red {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
 /* Чекбоксы и радиокнопки */
 .checkbox-group {
   display: flex;
@@ -347,6 +409,10 @@ table tr:hover {
   color: #666;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.mt-24 {
+  margin-top: 24px;
 }
 
 .list {
@@ -413,6 +479,111 @@ table tr:hover {
 .tag.muted {
   background: #f3f4f6;
   color: #9ca3af;
+}
+
+.status-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.status-table th,
+.status-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+.status-table th {
+  background: #f9fafb;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tag.status-completed {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.tag.status-open,
+.tag.status-due_today {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tag.status-overdue {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.tag.status-scheduled {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.tag.status-expired {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.summary-card.highlight {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.summary-card h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.summary-main {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.summary-meta {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.summary-card .zone-green {
+  color: #047857;
+}
+
+.summary-card .zone-yellow {
+  color: #b45309;
+}
+
+.summary-card .zone-red {
+  color: #b91c1c;
+}
+
+.summary-card .zone-blue {
+  color: #1d4ed8;
 }
 
 /* small preview of tasks in lists (used on Feedback360 page) */

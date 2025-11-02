@@ -65,7 +65,7 @@ const Header = () => {
                 <span className="profile-name">
                   {user?.first_name} {user?.last_name}
                 </span>
-                <span className="profile-role">{employee?.position || 'Сотрудник'}</span>
+                <span className="profile-role">{employee?.position_title || employee?.position_name || 'Сотрудник'}</span>
               </div>
             </button>
 
