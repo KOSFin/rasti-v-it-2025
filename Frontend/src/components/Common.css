@@ -491,42 +491,53 @@ table tr:hover {
 .status-table td {
   padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .status-table th {
-  background: #f9fafb;
+  background: var(--bg-secondary);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .tag.status-completed {
-  background: #d1fae5;
-  color: #047857;
+  background: rgba(76, 175, 80, 0.18);
+  color: var(--color-success);
 }
 
 .tag.status-open,
 .tag.status-due_today {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: rgba(33, 150, 243, 0.16);
+  color: var(--color-info);
 }
 
 .tag.status-overdue {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(244, 67, 54, 0.16);
+  color: var(--color-error);
 }
 
 .tag.status-scheduled {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: rgba(96, 165, 250, 0.14);
+  color: var(--color-info);
 }
 
 .tag.status-expired {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(255, 152, 0, 0.18);
+  color: var(--color-warning);
+}
+
+.tag.status-awaiting_feedback {
+  background: rgba(255, 193, 7, 0.2);
+  color: var(--color-warning);
+}
+
+.tag.status-missed {
+  background: rgba(239, 68, 68, 0.22);
+  color: var(--color-error);
 }
 
 .summary-strip {
@@ -536,19 +547,19 @@ table tr:hover {
 }
 
 .summary-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 16px;
   padding: 18px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 6px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .summary-card.highlight {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  border-color: rgba(76, 175, 80, 0.28);
+  background: rgba(76, 175, 80, 0.12);
 }
 
 .summary-card h3 {
@@ -556,7 +567,7 @@ table tr:hover {
   font-size: 13px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .summary-main {

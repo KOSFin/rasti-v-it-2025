@@ -142,6 +142,11 @@
   gap: 16px;
 }
 
+.chart-panel .chart-wrapper {
+  width: 100%;
+  height: 280px;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;

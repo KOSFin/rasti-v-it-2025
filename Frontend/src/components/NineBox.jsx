@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiGrid, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { getNineBoxMatrix } from '../api/services';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts';
 import './NineBox.css';
 
 const BOX_LABELS = [
@@ -91,6 +100,27 @@ function NineBox() {
       attention,
     };
   }, [grid, filteredData.length]);
+
+  const distribution = useMemo(() => {
+    const base = BOX_CODES.flatMap((row, y) =>
+      row.map((code, x) => ({
+        code,
+        count: 0,
+        label: BOX_LABELS[y][x].split('\n')[0],
+        short: `${['Н', 'С', 'В'][y]}-${['Н', 'С', 'В'][x]}`,
+      }))
+    );
+    const counts = Object.fromEntries(base.map((item) => [item.code, { ...item }]));
+
+    filteredData.forEach((entry) => {
+      const x = Math.max(0, Math.min(2, entry.nine_box_x ?? 0));
+      const y = Math.max(0, Math.min(2, entry.nine_box_y ?? 0));
+      const code = BOX_CODES[y][x];
+      counts[code].count += 1;
+    });
+
+    return base.map((item) => counts[item.code]);
+  }, [filteredData]);
 
   return (
     <div className="page nine-box-page">
@@ -192,6 +222,39 @@ function NineBox() {
               ))}
             </div>
             <div className="axis-label x">Результативность →</div>
+          </div>
+        )}
+      </section>
+
+      <section className="panel chart-panel">
+        <header className="panel-header">
+          <div>
+            <p className="panel-overline">Агрегированная статистика</p>
+            <h2>Распределение по квадрантам</h2>
+          </div>
+        </header>
+        {loading ? (
+          <div className="matrix-loading">Подготавливаем график…</div>
+        ) : (
+          <div className="chart-wrapper">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={distribution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+                <XAxis dataKey="short" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255, 107, 53, 0.06)' }}
+                  contentStyle={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: `1px solid var(--border-color)`,
+                    borderRadius: '12px',
+                    color: 'var(--text-primary)',
+                  }}
+                  formatter={(value, _, { payload }) => [value, payload.label]}
+                />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--color-accent)" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
       </section>

@@ -16,6 +16,8 @@ from .serializers import (
     NotificationSerializer,
     ReviewCycleTriggerSerializer,
     ReviewSubmitSerializer,
+    SkillReviewFeedbackSubmitSerializer,
+    SkillReviewQueueItemSerializer,
     TaskGoalCreateSerializer,
     TaskReviewSubmitSerializer,
     TaskReviewTriggerSerializer,
@@ -27,9 +29,11 @@ from .services import (
     fetch_skill_form,
     fetch_task_form,
     generate_skill_review_cycles,
+    manager_skill_review_queue,
     review_analytics,
     skill_review_overview,
     submit_skill_answers,
+    submit_skill_feedback,
     submit_task_answers,
     trigger_task_reviews,
     sync_employer_from_employee,
@@ -150,6 +154,109 @@ class SkillReviewOverviewView(APIView):
 
         payload = skill_review_overview(target_employer)
         return Response(payload)
+
+
+class SkillReviewManagerQueueView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        employer = Employer.objects.filter(user=request.user).first()
+        employee = Employee.objects.filter(user=request.user).first()
+
+        if not employer and employee:
+            employer = sync_employer_from_employee(employee)
+
+        if not employer and request.user.is_superuser:
+            placeholder_email = request.user.email or f"admin+{request.user.id}@local"
+            placeholder_name = request.user.get_full_name() or request.user.username or "Администратор"
+            employer, _ = Employer.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    "fio": placeholder_name,
+                    "email": placeholder_email,
+                    "date_of_employment": timezone.now().date(),
+                    "position": "Администратор",
+                },
+            )
+
+        if not employer:
+            return Response(
+                {"detail": "Профиль не найден. Обратитесь к администратору."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not request.user.is_superuser:
+            allowed_roles = {
+                Employee.Role.MANAGER,
+                Employee.Role.ADMIN,
+                Employee.Role.BUSINESS_PARTNER,
+            }
+            if not employee or employee.role not in allowed_roles:
+                return Response(
+                    {"detail": "Недостаточно прав для просмотра очереди тестов."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        payload = manager_skill_review_queue(employer)
+        serializer = SkillReviewQueueItemSerializer(payload["items"], many=True)
+        return Response({"items": serializer.data, "stats": payload["stats"]})
+
+
+class SkillReviewFeedbackView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = SkillReviewFeedbackSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = serializer.validated_data["message"].strip()
+
+        employer = Employer.objects.filter(user=request.user).first()
+        employee = Employee.objects.filter(user=request.user).first()
+
+        if not employer and employee:
+            employer = sync_employer_from_employee(employee)
+
+        if not employer and request.user.is_superuser:
+            placeholder_email = request.user.email or f"admin+{request.user.id}@local"
+            placeholder_name = request.user.get_full_name() or request.user.username or "Администратор"
+            employer, _ = Employer.objects.get_or_create(
+                user=request.user,
+                defaults={
+                    "fio": placeholder_name,
+                    "email": placeholder_email,
+                    "date_of_employment": timezone.now().date(),
+                    "position": "Администратор",
+                },
+            )
+
+        if not employer:
+            return Response(
+                {"detail": "Профиль не найден. Обратитесь к администратору."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not request.user.is_superuser:
+            allowed_roles = {
+                Employee.Role.MANAGER,
+                Employee.Role.ADMIN,
+                Employee.Role.BUSINESS_PARTNER,
+            }
+            if not employee or employee.role not in allowed_roles:
+                return Response(
+                    {"detail": "Недостаточно прав для отправки фидбека."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        try:
+            result = submit_skill_feedback(
+                employer,
+                log_id=serializer.validated_data["log_id"],
+                message=message,
+            )
+        except ServiceError as error:
+            return _service_error_response(error)
+
+        return Response(result)
 
 
 class AdaptationIndexView(APIView):

@@ -7,6 +7,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import GoalsAndTasks from './components/GoalsAndTasks';
 import SelfAssessment from './components/SelfAssessment';
+import SkillAssessments from './components/SkillAssessments';
 import Feedback360 from './components/Feedback360';
 import NineBox from './components/NineBox';
 import Colleagues from './components/Colleagues';
@@ -120,6 +121,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <SelfAssessment />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/skills-assessments"
+              element={
+                <PrivateRoute>
+                  <SkillAssessments />
                 </PrivateRoute>
               }
             />

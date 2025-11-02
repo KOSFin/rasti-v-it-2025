@@ -176,6 +176,12 @@ export const getAdaptationIndex = (params) =>
 export const getSkillReviewOverview = (params) =>
   api.get('/api/performance/review/overview/', { params });
 
+export const getSkillReviewManagerQueue = () =>
+  api.get('/api/performance/review/manager/queue/');
+
+export const submitSkillReviewFeedback = (data) =>
+  api.post('/api/performance/review/manager/feedback/', data);
+
 // Task & Goal Review
 export const createReviewGoal = (data) =>
   api.post('/api/performance/task-goal/create/', data);

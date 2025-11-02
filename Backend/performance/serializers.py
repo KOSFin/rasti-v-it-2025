@@ -105,3 +105,22 @@ class NotificationSerializer(serializers.ModelSerializer):
             "related_log",
         ]
         read_only_fields = fields
+
+
+class SkillReviewFeedbackSubmitSerializer(serializers.Serializer):
+    log_id = serializers.IntegerField()
+    message = serializers.CharField(min_length=3, max_length=5000)
+
+
+class SkillReviewQueueItemSerializer(serializers.Serializer):
+    log_id = serializers.IntegerField()
+    employee_id = serializers.IntegerField()
+    employee_name = serializers.CharField()
+    period_label = serializers.CharField()
+    status = serializers.CharField()
+    submitted_at = serializers.DateTimeField(allow_null=True)
+    due_date = serializers.DateField()
+    days_overdue = serializers.IntegerField()
+    score = serializers.FloatField(allow_null=True)
+    feedback = serializers.DictField(allow_null=True)
+    reputation_penalty = serializers.FloatField()

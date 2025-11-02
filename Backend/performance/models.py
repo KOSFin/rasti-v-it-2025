@@ -117,6 +117,7 @@ class ReviewLog(TimeStampedModel):
     STATUS_COMPLETED = "completed"
     STATUS_EXPIRED = "expired"
     STATUS_PENDING_EMAIL = "pending_email"
+    STATUS_AWAITING_FEEDBACK = "awaiting_feedback"
 
     CONTEXT_SKILL = "skill"
     CONTEXT_TASK = "task"
@@ -157,6 +158,7 @@ class ReviewLog(TimeStampedModel):
             (STATUS_COMPLETED, "Completed"),
             (STATUS_EXPIRED, "Expired"),
             (STATUS_PENDING_EMAIL, "Pending email"),
+            (STATUS_AWAITING_FEEDBACK, "Awaiting feedback"),
         ),
         default=STATUS_PENDING,
     )
@@ -364,3 +366,28 @@ class SiteNotification(TimeStampedModel):
         self.is_read = True
         self.read_at = timezone.now()
         self.save(update_fields=["is_read", "read_at", "updated_at"])
+
+
+class SkillReviewFeedback(TimeStampedModel):
+    """Manager feedback provided after a skill review submission."""
+
+    log = models.OneToOneField(
+        ReviewLog,
+        on_delete=models.CASCADE,
+        related_name="feedback",
+        help_text="Skill review log awaiting manager response",
+    )
+    author = models.ForeignKey(
+        Employer,
+        on_delete=models.CASCADE,
+        related_name="skill_feedbacks",
+    )
+    message = models.TextField()
+    shared_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def mark_shared(self) -> None:
+        self.shared_at = timezone.now()
+        self.save(update_fields=["shared_at", "updated_at"])

@@ -19,88 +19,177 @@ from .models import (
     ReviewLog,
     ReviewPeriod,
     ReviewQuestion,
-    ReviewSchedule,
-    ReviewTask,
-    SkillCategory,
-    SkillQuestion,
-    SiteNotification,
-    TaskReviewAnswer,
-    TeamRelation,
-    default_token_expiry,
-)
+    timeline: List[Dict] = []
+    tests_total = 0
+    tests_completed = 0
+    tests_due = 0
+    tests_due_completed = 0
+    tests_completed_by_employee = 0
+    overdue_entries = 0
+    waiting_feedback_entries = 0
+    punctuality_penalty = 0.0
+    overdue_delay_days = 0
+    waiting_feedback_max = 0
+    active_review: Optional[Dict] = None
+    next_review: Optional[Dict] = None
 
-if TYPE_CHECKING:  # pragma: no cover - import only for type hints
-    from api.models import Employee
+    for period in periods:
+        log = logs_by_period.get(period.id)
+        metadata = log.metadata or {} if log else {}
+        due_date = _period_due_date(employer, period, metadata)
 
+        stats = per_period_scores.get(period.id, {"sum": 0.0, "weight": 0.0})
+        average_score = _weighted_average(stats["sum"], stats["weight"])
 
-class ServiceError(Exception):
-    """Base service layer exception."""
+        status = "scheduled"
+        token = None
+        expires_at = None
+        completed_at = None
+        feedback_payload = None
+        submitted_at_iso = metadata.get("submitted_at")
+        awaiting_feedback_since = metadata.get("awaiting_feedback_since")
+        waiting_days = 0
+        available_from_iso = metadata.get("available_since") or due_date.isoformat()
+        days_past_due = (today - due_date).days if today > due_date else 0
+        overdue_threshold = due_date + timedelta(days=30)
+        overdue_flag = today > overdue_threshold
 
-    def __init__(self, message: str, *, code: str = "service_error", status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.code = code
-        self.status = status
+        feedback_obj = getattr(log, "feedback", None) if log else None
+        if feedback_obj:
+            shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
+            feedback_payload = {
+                "author": feedback_obj.author.fio,
+                "message": feedback_obj.message,
+                "shared_at": shared_ts.isoformat() if shared_ts else None,
+            }
 
+        if log:
+            if log.status == ReviewLog.STATUS_COMPLETED:
+                status = "completed"
+                completion_source = None
+                if feedback_obj and feedback_obj.shared_at:
+                    completion_source = feedback_obj.shared_at
+                else:
+                    completion_source = _log_completed_at(log)
+                completed_at = completion_source.isoformat() if completion_source else submitted_at_iso
+                tests_completed_by_employee += 1
+            elif log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
+                status = "awaiting_feedback"
+                waiting_feedback_entries += 1
+                tests_completed_by_employee += 1
+                completed_at = submitted_at_iso
+                if awaiting_feedback_since:
+                    try:
+                        waiting_days = max(
+                            (today - datetime.fromisoformat(awaiting_feedback_since).date()).days,
+                            0,
+                        )
+                    except (TypeError, ValueError):
+                        waiting_days = 0
+                waiting_feedback_max = max(waiting_feedback_max, waiting_days)
+            elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
+                if today < due_date:
+                    status = "open"
+                elif today == due_date:
+                    status = "due_today"
+                else:
+                    status = "open"
+                if overdue_flag and today >= due_date:
+                    status = "overdue"
+                token = str(log.token)
+                expires_at = log.expires_at.isoformat()
+            elif log.status == ReviewLog.STATUS_EXPIRED:
+                status = "expired"
+            else:
+                status = log.status
+        else:
+            if today < due_date:
+                status = "scheduled"
+            elif today == due_date:
+                status = "due_today"
+            else:
+                status = "missed"
 
-@dataclass
-class ReviewCycleResult:
-    created_self_tests: int = 0
-    created_peer_reviews: int = 0
-    notifications_created: int = 0
+        tests_total += 1
+        if status == "completed":
+            tests_completed += 1
 
-    def as_dict(self) -> Dict[str, int]:
-        return {
-            "created_self_tests": self.created_self_tests,
-            "created_peer_reviews": self.created_peer_reviews,
-            "notifications_created": self.notifications_created,
+        if due_date <= today:
+            tests_due += 1
+            if status in {"completed", "awaiting_feedback"}:
+                tests_due_completed += 1
+
+        penalty = 0.0
+        overdue_delay = 0
+        if status == "overdue":
+            overdue_entries += 1
+            delay_days = max(days_past_due - 30, 0)
+            overdue_delay_days += delay_days
+            penalty = delay_days + 10
+            overdue_delay = delay_days
+        elif status == "missed":
+            penalty = 35
+        elif status == "expired":
+            penalty = 25
+        elif status == "awaiting_feedback" and waiting_days > 21:
+            penalty = (waiting_days - 21) * 0.5
+
+        punctuality_penalty += penalty
+
+        can_start = token is not None and status in {"open", "due_today", "overdue"}
+
+        entry = {
+            "period_id": period.id,
+            "period_label": _period_label(period),
+            "month_offset": period.month_period,
+            "due_date": due_date.isoformat(),
+            "available_from": available_from_iso,
+            "status": status,
+            "score": average_score,
+            "weight_total": stats["weight"],
+            "token": token if can_start else None,
+            "can_start": can_start,
+            "expires_at": expires_at,
+            "completed_at": completed_at,
+            "submitted_at": submitted_at_iso,
+            "feedback": feedback_payload,
+            "metadata": metadata,
+            "days_past_due": days_past_due,
+            "waiting_days": waiting_days,
+            "overdue_delay": overdue_delay,
+            "reputation_penalty": penalty,
         }
 
+        timeline.append(entry)
 
-DEFAULT_SKILL_PERIODS: Tuple[Tuple[int, str], ...] = (
-    (0, "Старт"),
-    (1, "1 месяц"),
-    (3, "3 месяца"),
-    (6, "6 месяцев"),
-    (12, "12 месяцев"),
-)
+        if can_start:
+            if not active_review or due_date < date.fromisoformat(active_review["due_date"]):
+                active_review = {
+                    "period_id": period.id,
+                    "period_label": entry["period_label"],
+                    "status": status,
+                    "token": entry["token"],
+                    "expires_at": expires_at,
+                    "due_date": entry["due_date"],
+                }
 
+        candidate_for_next = False
+        if status in {"scheduled", "open", "due_today"} and due_date >= today:
+            candidate_for_next = True
+        elif status == "overdue" and not next_review:
+            candidate_for_next = True
 
-def _activation_start_date(employer: Employer) -> Optional[date]:
-    base = employer.activation_date or employer.date_of_employment
-    return base
-
-
-def add_months(base: date, months: int) -> date:
-    """Add a number of months to the provided date while keeping month-end constraints."""
-
-    if months == 0:
-        return base
-
-    month_index = base.month - 1 + months
-    year = base.year + month_index // 12
-    month = month_index % 12 + 1
-    day = min(base.day, monthrange(year, month)[1])
-    return date(year, month, day)
-
-
-def ensure_default_skill_periods() -> List[ReviewPeriod]:
-    """Guarantee that baseline review periods exist in the database."""
-
-    ensured_ids: List[int] = []
-    for month_period, label in DEFAULT_SKILL_PERIODS:
-        period, _ = ReviewPeriod.objects.get_or_create(
-            month_period=month_period,
-            defaults={"name": label, "is_active": True},
-        )
-        ensured_ids.append(period.id)
-
-    for offset in range(24, 121, 12):  # yearly checkpoints after the first year
-        period, _ = ReviewPeriod.objects.get_or_create(
-            month_period=offset,
-            defaults={"name": f"{offset} месяцев", "is_active": True},
-        )
-        ensured_ids.append(period.id)
+        if candidate_for_next:
+            existing_due = date.fromisoformat(next_review["due_date"]) if next_review else None
+            if not existing_due or due_date < existing_due:
+                days_left = max((due_date - today).days, 0)
+                next_review = {
+                    "period_id": period.id,
+                    "period_label": entry["period_label"],
+                    "due_date": entry["due_date"],
+                    "days_left": days_left,
+                    "status": status,
+                }
 
     return list(
         ReviewPeriod.objects.filter(id__in=ensured_ids).order_by("month_period")
@@ -611,21 +700,35 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
         answer.save(update_fields=["grade", "question_type", "updated_at"])
         updated += 1
 
+    now_iso = timezone.now().isoformat()
+    metadata = {**(review_log.metadata or {})}
+
     if not partial:
-        review_log.status = ReviewLog.STATUS_COMPLETED
-        review_log.metadata = {**(review_log.metadata or {}), "submitted_at": timezone.now().isoformat()}
+        metadata.update({"submitted_at": now_iso})
+        if review_log.context == ReviewLog.CONTEXT_SKILL and review_log.employer_id == review_log.respondent_id:
+            metadata.setdefault("awaiting_feedback_since", now_iso)
+            review_log.status = ReviewLog.STATUS_AWAITING_FEEDBACK
+        else:
+            review_log.status = ReviewLog.STATUS_COMPLETED
     else:
+        metadata.update({"save_mode": "partial", "draft_saved_at": now_iso})
         review_log.status = ReviewLog.STATUS_PENDING
-        review_log.metadata = {**(review_log.metadata or {}), "save_mode": "partial"}
+
+    review_log.metadata = metadata
     review_log.save(update_fields=["status", "metadata", "updated_at"])
 
     if not partial:
         now = timezone.now()
-        SiteNotification.objects.filter(related_log=review_log).update(
+        SiteNotification.objects.filter(related_log=review_log, recipient=respondent).update(
             is_read=True,
             read_at=now,
             updated_at=now,
         )
+
+        if review_log.context == ReviewLog.CONTEXT_SKILL and review_log.employer_id == review_log.respondent_id:
+            managers = _managers_for_employer(employer)
+            if managers:
+                _notify_feedback_required(review_log, managers)
 
     return {
         "status": "success",
@@ -642,6 +745,29 @@ def _period_label(period: ReviewPeriod) -> str:
     if period.month_period == 0:
         return period.name or "start"
     return period.name or f"{period.month_period}m"
+
+
+def _self_score_for_period(employer: Employer, period: ReviewPeriod) -> Optional[float]:
+    answers = (
+        ReviewAnswer.objects.filter(
+            employer=employer,
+            respondent=employer,
+            period=period,
+        )
+        .select_related("question")
+    )
+
+    total_sum = 0.0
+    total_weight = 0.0
+
+    for answer in answers:
+        if answer.grade == 0:
+            continue
+        weight = float(getattr(answer.question, "weight", 1) or 1)
+        total_sum += answer.grade * weight
+        total_weight += weight
+
+    return _weighted_average(total_sum, total_weight)
 
 
 def review_analytics(
@@ -1092,6 +1218,178 @@ def submit_task_answers(token: str, answers: List[Dict]) -> Dict:
     }
 
 
+def manager_skill_review_queue(manager: Employer) -> Dict:
+    today = timezone.now().date()
+    if manager.user and manager.user.is_superuser:
+        employer_ids = list(Employer.objects.values_list("id", flat=True))
+    else:
+        employer_ids = _team_employers_for_manager(manager)
+
+    if not employer_ids:
+        return {
+            "items": [],
+            "stats": {
+                "pending": 0,
+                "awaiting_feedback": 0,
+                "completed": 0,
+            },
+        }
+
+    logs = (
+        ReviewLog.objects.filter(
+            context=ReviewLog.CONTEXT_SKILL,
+            employer_id__in=employer_ids,
+            status__in=[
+                ReviewLog.STATUS_PENDING,
+                ReviewLog.STATUS_PENDING_EMAIL,
+                ReviewLog.STATUS_AWAITING_FEEDBACK,
+                ReviewLog.STATUS_COMPLETED,
+            ],
+        )
+        .select_related("employer", "employer__user", "period", "feedback", "feedback__author")
+        .order_by("-updated_at")
+    )
+
+    stats = {"pending": 0, "awaiting_feedback": 0, "completed": 0}
+    items: List[Dict] = []
+
+    for log in logs:
+        metadata = log.metadata or {}
+        due_date = _period_due_date(log.employer, log.period, metadata)
+        status = "scheduled"
+        days_overdue = max((today - due_date).days, 0) if today > due_date else 0
+        overdue_threshold_passed = today > (due_date + timedelta(days=30))
+        feedback_payload = None
+
+        if getattr(log, "feedback", None):
+            feedback_obj = log.feedback
+            shared_ts = feedback_obj.shared_at or feedback_obj.updated_at
+            feedback_payload = {
+                "author": feedback_obj.author.fio,
+                "message": feedback_obj.message,
+                "shared_at": shared_ts.isoformat() if shared_ts else None,
+            }
+
+        if log.status == ReviewLog.STATUS_COMPLETED:
+            stats["completed"] += 1
+            status = "completed"
+        elif log.status == ReviewLog.STATUS_AWAITING_FEEDBACK:
+            stats["awaiting_feedback"] += 1
+            status = "awaiting_feedback"
+        elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
+            stats["pending"] += 1
+            if today < due_date:
+                status = "scheduled"
+            elif today == due_date:
+                status = "due_today"
+            else:
+                status = "open"
+            if overdue_threshold_passed and today >= due_date:
+                status = "overdue"
+        else:
+            status = log.status
+
+        reputation_penalty = 0.0
+        if status == "overdue":
+            reputation_penalty = max(days_overdue - 30, 0) + 10
+
+        score = _self_score_for_period(log.employer, log.period) if log.period else None
+
+        submitted_iso = metadata.get("submitted_at")
+        submitted_at = None
+        if submitted_iso:
+            try:
+                submitted_at = datetime.fromisoformat(submitted_iso)
+            except ValueError:
+                submitted_at = None
+
+        items.append(
+            {
+                "log_id": log.id,
+                "employee_id": log.employer_id,
+                "employee_name": log.employer.fio,
+                "period_label": _period_label(log.period) if log.period else "—",
+                "status": status,
+                "submitted_at": submitted_at.isoformat() if submitted_at else None,
+                "due_date": due_date.isoformat() if due_date else None,
+                "days_overdue": days_overdue,
+                "score": score,
+                "feedback": feedback_payload,
+                "reputation_penalty": reputation_penalty,
+            }
+        )
+
+    return {"items": items, "stats": stats}
+
+
+def submit_skill_feedback(manager: Employer, *, log_id: int, message: str) -> Dict:
+    try:
+        log = ReviewLog.objects.select_related("employer", "period", "feedback", "feedback__author").get(
+            id=log_id,
+            context=ReviewLog.CONTEXT_SKILL,
+        )
+    except ReviewLog.DoesNotExist as exc:
+        raise ServiceError("Запись теста не найдена", code="review_missing", status=404) from exc
+
+    if log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
+        raise ServiceError(
+            "Сотрудник ещё не завершил тест", code="not_ready", status=409
+        )
+
+    if not (manager.user and manager.user.is_superuser):
+        team_ids = set(_team_employers_for_manager(manager))
+        if log.employer_id not in team_ids:
+            raise ServiceError("Недостаточно прав для добавления фидбека", code="forbidden", status=403)
+
+    feedback, _ = SkillReviewFeedback.objects.update_or_create(
+        log=log,
+        defaults={
+            "author": manager,
+            "message": message,
+        },
+    )
+    feedback.mark_shared()
+
+    metadata = {**(log.metadata or {}), "feedback_shared_at": feedback.shared_at.isoformat() if feedback.shared_at else timezone.now().isoformat()}
+    log.status = ReviewLog.STATUS_COMPLETED
+    log.metadata = metadata
+    log.save(update_fields=["status", "metadata", "updated_at"])
+
+    if manager.pk:
+        SiteNotification.objects.filter(related_log=log, recipient=manager).update(
+            is_read=True,
+            read_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+
+    SiteNotification.objects.update_or_create(
+        related_log=log,
+        recipient=log.employer,
+        defaults={
+            "title": "Фидбек по тесту готов",
+            "message": message,
+            "context": ReviewLog.CONTEXT_SKILL,
+            "metadata": {
+                "token": str(log.token),
+                "period_label": _period_label(log.period) if log.period else "—",
+                "feedback_author": manager.fio,
+            },
+            "link": "/skills-assessments",
+        },
+    )
+
+    payload = {
+        "log_id": log.id,
+        "status": log.status,
+        "feedback": {
+            "author": feedback.author.fio,
+            "message": feedback.message,
+            "shared_at": feedback.shared_at.isoformat() if feedback.shared_at else None,
+        },
+    }
+    return {"status": "success", **payload}
+
+
 def _log_completed_at(log: ReviewLog) -> Optional[datetime]:
     metadata = log.metadata or {}
     submitted_at = metadata.get("submitted_at")
@@ -1109,6 +1407,98 @@ def _employee_for_employer(employer: Employer) -> Optional["Employee"]:
     from api.models import Employee  # local import to avoid circular dependencies
 
     return Employee.objects.select_related("department").filter(user=employer.user).first()
+
+
+def _managers_for_employer(employer: Employer) -> List[Employer]:
+    """Return manager and partner employers overseeing the provided employee."""
+
+    employee_profile = _employee_for_employer(employer)
+    if not employee_profile:
+        return []
+
+    from api.models import Employee  # local import to avoid circular dependencies
+
+    manager_qs = Employee.objects.filter(
+        Q(role=Employee.Role.MANAGER)
+        | Q(role=Employee.Role.BUSINESS_PARTNER)
+        | Q(role=Employee.Role.ADMIN)
+    )
+
+    if employee_profile.department_id:
+        manager_qs = manager_qs.filter(
+            Q(department_id=employee_profile.department_id)
+            | Q(role__in=[Employee.Role.BUSINESS_PARTNER, Employee.Role.ADMIN])
+        )
+
+    manager_user_ids = [row for row in manager_qs.values_list("user_id", flat=True) if row]
+    employer_qs = Employer.objects.filter(user_id__in=manager_user_ids)
+
+    superusers = Employer.objects.filter(user__is_superuser=True)
+    combined = {emp.id: emp for emp in employer_qs}
+    for su in superusers:
+        combined.setdefault(su.id, su)
+
+    combined.pop(employer.id, None)
+    return list(combined.values())
+
+
+def _team_employers_for_manager(manager: Employer) -> List[int]:
+    employee_profile = _employee_for_employer(manager)
+    if not employee_profile:
+        return []
+
+    from api.models import Employee  # local import
+
+    if manager.user and manager.user.is_superuser:
+        return list(Employer.objects.values_list("id", flat=True))
+
+    team_members = Employee.objects.filter(
+        Q(department_id=employee_profile.department_id)
+    ).exclude(id=employee_profile.id)
+
+    team_user_ids = [row for row in team_members.values_list("user_id", flat=True) if row]
+    return list(
+        Employer.objects.filter(user_id__in=team_user_ids).values_list("id", flat=True)
+    )
+
+
+def _notify_feedback_required(log: ReviewLog, managers: Iterable[Employer]) -> int:
+    """Fan out notifications requesting feedback from leadership."""
+
+    created = 0
+    period_label = _period_label(log.period) if log.period else ""
+    due_at = None
+    if log.metadata:
+        due_at = log.metadata.get("due_at")
+
+    for manager in managers:
+        defaults = {
+            "title": "Требуется фидбек по тесту",
+            "message": (
+                f"{log.employer.fio} завершил(а) тест по навыкам за период {period_label}."
+                " Оставьте обратную связь, чтобы закрепить результат."
+            ),
+            "context": ReviewLog.CONTEXT_SKILL,
+            "metadata": {
+                "token": str(log.token),
+                "period_label": period_label,
+                "due_at": due_at,
+                "employer_id": log.employer_id,
+                "log_id": log.id,
+            },
+            "link": f"/reviews/skills/{log.token}",
+        }
+        notification, was_created = SiteNotification.objects.update_or_create(
+            related_log=log,
+            recipient=manager,
+            defaults=defaults,
+        )
+        if was_created:
+            created += 1
+        else:
+            notification.updated_at = timezone.now()
+            notification.save(update_fields=["updated_at"])
+    return created
 
 
 def skill_review_overview(employer: Employer) -> Dict:
@@ -1250,6 +1640,9 @@ def skill_review_overview(employer: Employer) -> Dict:
                     "status": status,
                 }
 
+    punctuality_score = max(0.0, 100.0 - min(punctuality_penalty, 95.0))
+    average_overdue_delay = overdue_delay_days / overdue_entries if overdue_entries else 0.0
+
     analytics_payload = review_analytics(employer=employer, period=None, skill_type="all")
     try:
         adaptation_payload = adaptation_index(employer=employer, period=None, skill_type="all")
@@ -1260,10 +1653,83 @@ def skill_review_overview(employer: Employer) -> Dict:
             "interpretation": "Недостаточно данных для расчёта.",
         }
 
+    goal_self_avg: Optional[float] = None
+    goal_peer_avg: Optional[float] = None
+    goal_bias_delta: Optional[float] = None
+    collaboration_score = 50.0
+    collaboration_samples_count = 0
+
+    employee_profile = _employee_for_employer(employer)
+    if employee_profile:
+        from api.models import Feedback360, ManagerReview, SelfAssessment  # local import
+
+        goal_self_scores: List[float] = []
+        goal_peer_scores: List[float] = []
+        collaboration_samples: List[float] = []
+
+        assessments = list(
+            SelfAssessment.objects.filter(employee=employee_profile).select_related("goal")
+        )
+        if assessments:
+            for assessment in assessments:
+                if assessment.calculated_score is not None:
+                    goal_self_scores.append(float(assessment.calculated_score))
+                if assessment.collaboration_quality is not None:
+                    collaboration_samples.append(float(assessment.collaboration_quality))
+                goal = assessment.goal
+                peer_values = list(
+                    ManagerReview.objects.filter(goal=goal, employee=employee_profile).values_list("calculated_score", flat=True)
+                )
+                peer_values += list(
+                    Feedback360.objects.filter(goal=goal, employee=employee_profile).values_list("calculated_score", flat=True)
+                )
+                peer_values = [float(value) for value in peer_values if value is not None]
+                if peer_values:
+                    goal_peer_scores.append(sum(peer_values) / len(peer_values))
+
+        extra_collaboration = [
+            float(value)
+            for value in Feedback360.objects.filter(employee=employee_profile).values_list("collaboration_quality", flat=True)
+            if value is not None
+        ]
+        collaboration_samples.extend(extra_collaboration)
+        collaboration_samples_count = len(collaboration_samples)
+
+        if goal_self_scores:
+            goal_self_avg = sum(goal_self_scores) / len(goal_self_scores)
+        if goal_peer_scores:
+            goal_peer_avg = sum(goal_peer_scores) / len(goal_peer_scores)
+        if goal_self_avg is not None and goal_peer_avg is not None:
+            goal_bias_delta = goal_peer_avg - goal_self_avg
+
+        if collaboration_samples:
+            collaboration_raw = sum(collaboration_samples) / len(collaboration_samples)
+            collaboration_score = round(min(max(collaboration_raw, 0.0), 10.0) * 10.0, 1)
+
     averages = analytics_payload.get("averages", {})
     self_average = averages.get("overall_self") or 0
     peer_average = averages.get("overall_peer") or 0
     delta_average = averages.get("delta") or 0
+
+    bias_reference = goal_bias_delta if goal_bias_delta is not None else delta_average
+    self_awareness_score = 50.0
+    bias_tendency = "balanced"
+
+    if bias_reference is not None:
+        diff = float(bias_reference)
+        magnitude = abs(diff)
+        self_awareness_score = max(0.0, 100.0 - min(magnitude * 12.0, 60.0))
+        if diff > 0.5:
+            bias_tendency = "self_underestimates"
+        elif diff < -0.5:
+            bias_tendency = "self_overestimates"
+        else:
+            bias_tendency = "aligned"
+
+    overall_reputation_score = round(
+        (punctuality_score * 0.4) + (self_awareness_score * 0.4) + (collaboration_score * 0.2),
+        1,
+    )
 
     adaptation_index_value = adaptation_payload.get("AdaptationIndex")
     adaptation_zone = adaptation_payload.get("color_zone")
@@ -1319,11 +1785,74 @@ def skill_review_overview(employer: Employer) -> Dict:
         "task_alignment_rate": task_alignment,
         "reviews_completion_rate": reviews_completion_rate,
         "tests_completed": tests_completed,
+        "tests_completed_by_employee": tests_completed_by_employee,
         "tests_total": tests_total,
         "reviews_due": tests_due,
         "reviews_due_completed": tests_due_completed,
         "overdue_reviews": overdue_entries,
+        "waiting_feedback": waiting_feedback_entries,
+        "waiting_feedback_max": waiting_feedback_max,
+        "punctuality_score": round(punctuality_score, 1),
+        "punctuality_penalty": round(punctuality_penalty, 1),
+        "average_overdue_delay": round(average_overdue_delay, 1),
+        "collaboration_score": collaboration_score,
+        "self_awareness_score": round(self_awareness_score, 1),
+        "bias_tendency": bias_tendency,
+        "goal_bias_delta": round(goal_bias_delta, 2) if goal_bias_delta is not None else None,
         "last_growth": last_growth,
+    }
+
+    if overdue_entries:
+        punctuality_desc = (
+            f"{overdue_entries} тест(ов) просрочено; средняя задержка {round(average_overdue_delay, 1)} дн."
+        )
+    elif waiting_feedback_entries:
+        punctuality_desc = "Все тесты закрыты вовремя; ожидание фидбека со стороны руководителя."
+    else:
+        punctuality_desc = "Просрочки не зафиксированы; текущий ритм комфортный."
+
+    if bias_tendency == "self_underestimates":
+        self_awareness_desc = "Склонен занижать самооценку относительно коллег."
+    elif bias_tendency == "self_overestimates":
+        self_awareness_desc = "Склонен завышать самооценку; обратная связь выше ожидаемой."
+    elif bias_tendency == "aligned":
+        self_awareness_desc = "Самооценка совпадает со взглядом коллег."
+    else:
+        self_awareness_desc = "Недостаточно данных для оценки самооценки."
+
+    if collaboration_samples_count:
+        collaboration_desc = (
+            f"Средний индекс взаимодействия {round(collaboration_score / 10.0, 1)} из 10 по {collaboration_samples_count} отзывам."
+        )
+    else:
+        collaboration_desc = "Недостаточно данных по взаимодействию и командной работе."
+
+    reputation = {
+        "overall_score": overall_reputation_score,
+        "factors": {
+            "punctuality": {
+                "score": round(punctuality_score, 1),
+                "penalty": round(punctuality_penalty, 1),
+                "overdue_reviews": overdue_entries,
+                "description": punctuality_desc,
+            },
+            "self_awareness": {
+                "score": round(self_awareness_score, 1),
+                "bias_delta": round(bias_reference, 2) if bias_reference is not None else None,
+                "tendency": bias_tendency,
+                "description": self_awareness_desc,
+            },
+            "collaboration": {
+                "score": round(collaboration_score, 1),
+                "samples": collaboration_samples_count,
+                "description": collaboration_desc,
+            },
+        },
+        "signals": {
+            "waiting_feedback": waiting_feedback_entries,
+            "waiting_feedback_max": waiting_feedback_max,
+            "tests_completed_by_employee": tests_completed_by_employee,
+        },
     }
 
     return {
@@ -1337,6 +1866,7 @@ def skill_review_overview(employer: Employer) -> Dict:
         "active_review": active_review,
         "summary": summary,
         "analytics": analytics_payload,
+        "reputation": reputation,
     }
 
 

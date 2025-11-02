@@ -1,0 +1,132 @@
+.skill-assessment-table tbody tr.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.skill-assessment-table tbody tr.clickable:hover {
+  background-color: var(--bg-hover);
+}
+
+.skill-assessment-table .feedback-cell {
+  max-width: 280px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reputation-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.reputation-overview {
+  background-color: var(--bg-tertiary);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reputation-overview header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reputation-overview p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reputation-chart {
+  background-color: var(--bg-tertiary);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background-color: var(--color-accent);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.manager-queue-table td {
+  vertical-align: middle;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: var(--bg-secondary);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  width: min(520px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header,
+.modal-footer {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-body textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.modal-error {
+  color: var(--color-error);
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .reputation-section {
+    grid-template-columns: 1fr;
+  }
+
+  .skill-assessment-table .feedback-cell {
+    max-width: 200px;
+  }
+}
