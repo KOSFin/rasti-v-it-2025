@@ -409,8 +409,22 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
     )
 
     if existing_log and existing_log.status in [ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL]:
-        existing_log.expires_at = default_token_expiry()
-        existing_log.save(update_fields=["expires_at", "updated_at"])
+        # Ensure the token remains valid through the availability window
+        try:
+            available_since = (existing_log.metadata or {}).get("available_since")
+            if available_since:
+                available_since_date = datetime.fromisoformat(available_since).date()
+            else:
+                available_since_date = base_date
+        except Exception:
+            available_since_date = base_date
+        extend_until = available_since_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS + 1)
+        desired_expiry = timezone.now() + timedelta(days=max((extend_until - timezone.now().date()).days, 1))
+        if desired_expiry > existing_log.expires_at:
+            existing_log.expires_at = desired_expiry
+        meta = {**(existing_log.metadata or {}), "available_since": available_since_date.isoformat()}
+        existing_log.metadata = meta
+        existing_log.save(update_fields=["expires_at", "metadata", "updated_at"])
         _ensure_notification_for_log(existing_log)
         return existing_log
 
@@ -436,10 +450,14 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
             "review_type": "self",
             "trigger": "first_login",
             "due_at": base_date.isoformat(),
+            "available_since": base_date.isoformat(),
         },
     )
+    # Extend expiry to cover the availability window + 1 day
+    window_days = SKILL_REVIEW_MISS_GRACE_DAYS + 1
+    review_log.expires_at = timezone.now() + timedelta(days=window_days)
     review_log.status = ReviewLog.STATUS_PENDING
-    review_log.save(update_fields=["status", "updated_at"])
+    review_log.save(update_fields=["status", "expires_at", "updated_at"])
     return review_log
 
 
@@ -1571,9 +1589,16 @@ def skill_review_overview(employer: Employer) -> Dict:
         except (TypeError, ValueError):
             available_from_date = due_date
 
-        days_past_due = (today - due_date).days if today > due_date else 0
-        overdue_flag = today > due_date
-        miss_deadline = due_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
+        # Availability window: test is available for SKILL_REVIEW_MISS_GRACE_DAYS from available_from
+        available_until_date = (
+            datetime.fromisoformat(available_from_iso).date() + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
+            if available_from_iso
+            else due_date + timedelta(days=SKILL_REVIEW_MISS_GRACE_DAYS)
+        )
+        days_left = max((available_until_date - today).days, 0)
+        days_past_due = (today - available_until_date).days if today > available_until_date else 0
+        overdue_flag = today > available_until_date
+        miss_deadline = available_until_date  # compatibility var name
 
         feedback_obj = getattr(log, "feedback", None) if log else None
         if feedback_obj:
@@ -1613,16 +1638,12 @@ def skill_review_overview(employer: Employer) -> Dict:
             elif log.status in {ReviewLog.STATUS_PENDING, ReviewLog.STATUS_PENDING_EMAIL}:
                 if today < available_from_date:
                     status = "scheduled"
-                elif today < due_date:
-                    status = "open"
-                elif today == due_date:
-                    status = "due_today"
-                elif today <= miss_deadline:
-                    status = "overdue"
+                elif today <= available_until_date:
+                    status = "available"
                 else:
-                    status = "missed"
+                    status = "overdue"
 
-                if status != "missed":
+                if status in {"available", "overdue", "due_today", "open"}:
                     token = str(log.token)
                     expires_at = log.expires_at.isoformat()
             elif log.status == ReviewLog.STATUS_EXPIRED:
@@ -1632,14 +1653,10 @@ def skill_review_overview(employer: Employer) -> Dict:
         else:
             if today < available_from_date:
                 status = "scheduled"
-            elif today < due_date:
-                status = "open"
-            elif today == due_date:
-                status = "due_today"
-            elif today <= miss_deadline:
-                status = "overdue"
+            elif today <= available_until_date:
+                status = "available"
             else:
-                status = "missed"
+                status = "overdue"
 
         tests_total += 1
         if status == "completed":
@@ -1658,8 +1675,7 @@ def skill_review_overview(employer: Employer) -> Dict:
             overdue_delay_days += delay_days
             penalty = 10.0
             overdue_delay = delay_days
-        elif status == "missed":
-            penalty = 35
+        # No hard "missed" cutoff now; overdue persists after availability window
         elif status == "expired":
             penalty = 25
         elif status == "awaiting_feedback" and waiting_days > 21:
@@ -1667,7 +1683,7 @@ def skill_review_overview(employer: Employer) -> Dict:
 
         punctuality_penalty += penalty
 
-        can_start = token is not None and status in {"open", "due_today", "overdue"}
+    can_start = token is not None and status in {"available", "open", "due_today", "overdue"}
 
         entry = {
             "period_id": period.id,
@@ -1675,6 +1691,7 @@ def skill_review_overview(employer: Employer) -> Dict:
             "month_offset": period.month_period,
             "due_date": due_date.isoformat(),
             "available_from": available_from_iso,
+            "available_until": available_until_date.isoformat(),
             "status": status,
             "score": average_score,
             "peer_score": peer_average,
@@ -1688,6 +1705,7 @@ def skill_review_overview(employer: Employer) -> Dict:
             "feedback": feedback_payload,
             "metadata": metadata,
             "days_past_due": days_past_due,
+            "days_left": days_left,
             "waiting_days": waiting_days,
             "overdue_delay": overdue_delay,
             "reputation_penalty": penalty,
@@ -1701,6 +1719,7 @@ def skill_review_overview(employer: Employer) -> Dict:
                 "period_label": entry["period_label"],
                 "due_date": entry["due_date"],
                 "available_from": entry["available_from"],
+                "available_until": entry["available_until"],
                 "self_score": round(average_score, 2) if average_score is not None else None,
                 "peer_score": round(peer_average, 2) if peer_average is not None else None,
                 "effectiveness": effectiveness_score,
