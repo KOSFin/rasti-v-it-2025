@@ -388,8 +388,7 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
         .select_related("category")
         .order_by("category__skill_type", "category__name", "id")
     )
-    if not questions:
-        return None
+    # Even if there are no questions yet, we still create a log so the user can start when ready.
 
     zero_period = _ensure_zero_period()
 
@@ -415,12 +414,15 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
         _ensure_notification_for_log(existing_log)
         return existing_log
 
-    created_answers, _ = _create_question_placeholders(
-        employer=employer,
-        respondent=employer,
-        period=zero_period,
-        questions=questions,
-    )
+    if questions:
+        created_answers, _ = _create_question_placeholders(
+            employer=employer,
+            respondent=employer,
+            period=zero_period,
+            questions=questions,
+        )
+    else:
+        created_answers = 0
 
     if not created_answers and existing_log and existing_log.status == ReviewLog.STATUS_COMPLETED:
         return None
@@ -1529,6 +1531,17 @@ def skill_review_overview(employer: Employer) -> Dict:
 
     for period in periods:
         log = logs_by_period.get(period.id)
+
+        # On-demand ensure the Start period self-review exists and is usable
+        if log is None and period.month_period == 0:
+            try:
+                created_log = ensure_initial_self_review(employer)
+            except Exception:
+                created_log = None
+            if created_log:
+                log = created_log
+                logs_by_period[period.id] = log
+
         metadata = log.metadata or {} if log else {}
         due_date = _period_due_date(employer, period, metadata)
 
