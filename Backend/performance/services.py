@@ -418,6 +418,9 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
         _ensure_notification_for_log(existing_log)
         return existing_log
 
+    if existing_log and existing_log.status in [ReviewLog.STATUS_AWAITING_FEEDBACK, ReviewLog.STATUS_COMPLETED]:
+        return existing_log
+
     if questions:
         created_answers, _ = _create_question_placeholders(
             employer=employer,
@@ -428,8 +431,8 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
     else:
         created_answers = 0
 
-    if not created_answers and existing_log and existing_log.status == ReviewLog.STATUS_COMPLETED:
-        return None
+    if not created_answers and existing_log and existing_log.status in [ReviewLog.STATUS_COMPLETED, ReviewLog.STATUS_AWAITING_FEEDBACK]:
+        return existing_log
 
     review_log, _ = _create_review_log(
         employer=employer,

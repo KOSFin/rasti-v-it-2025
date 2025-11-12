@@ -206,7 +206,7 @@ def register(request):
         pending_review = None
         if employer:
             log = ensure_initial_self_review(employer)
-            if log:
+            if log and log.status in {log.STATUS_PENDING, log.STATUS_PENDING_EMAIL}:
                 pending_review = {
                     'token': str(log.token),
                     'expires_at': log.expires_at.isoformat(),
@@ -289,7 +289,7 @@ def login(request):
             pending_review = None
             if employer:
                 log = ensure_initial_self_review(employer)
-                if log and log.status != log.STATUS_COMPLETED:
+                if log and log.status in {log.STATUS_PENDING, log.STATUS_PENDING_EMAIL}:
                     pending_review = {
                         'token': str(log.token),
                         'expires_at': log.expires_at.isoformat(),
@@ -372,7 +372,7 @@ def current_user(request):
             pending_review = None
             if employer:
                 log = ensure_initial_self_review(employer)
-                if log and log.status != log.STATUS_COMPLETED:
+                if log and log.status in {log.STATUS_PENDING, log.STATUS_PENDING_EMAIL}:
                     pending_review = {
                         'token': str(log.token),
                         'expires_at': log.expires_at.isoformat(),
