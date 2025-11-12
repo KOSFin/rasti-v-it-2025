@@ -1,20 +1,52 @@
 from django.contrib import admin
 from .models import (
-    Department, Employee, Goal, Task, SelfAssessment,
-    Feedback360, ManagerReview, PotentialAssessment, FinalReview,
-    GoalEvaluationNotification
+    Department,
+    Employee,
+    EmployeeRoleAssignment,
+    FinalReview,
+    Feedback360,
+    Goal,
+    GoalEvaluationNotification,
+    Organization,
+    PotentialAssessment,
+    SelfAssessment,
+    Task,
+    Team,
+    ManagerReview,
 )
+
+
+@admin.register(Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_active']
+    list_filter = ['is_active']
+    search_fields = ['name']
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'description']
-    search_fields = ['name']
+    list_display = ['name', 'organization', 'parent']
+    list_filter = ['organization']
+    search_fields = ['name', 'organization__name']
+
+
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    list_display = ['name', 'department', 'parent']
+    list_filter = ['department']
+    search_fields = ['name', 'department__name']
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ['user', 'department', 'position', 'is_manager', 'hire_date']
-    list_filter = ['is_manager', 'department']
+    list_display = ['user', 'department', 'team', 'position', 'is_manager', 'hire_date']
+    list_filter = ['is_manager', 'department', 'team']
     search_fields = ['user__username', 'user__first_name', 'user__last_name', 'position']
+
+
+@admin.register(EmployeeRoleAssignment)
+class EmployeeRoleAssignmentAdmin(admin.ModelAdmin):
+    list_display = ['employee', 'role', 'organization', 'department', 'team', 'position', 'target_employee', 'is_active', 'assigned_at']
+    list_filter = ['role', 'is_active', 'organization', 'department', 'team']
+    search_fields = ['employee__user__first_name', 'employee__user__last_name', 'employee__user__username']
 
 @admin.register(Goal)
 class GoalAdmin(admin.ModelAdmin):

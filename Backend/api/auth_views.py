@@ -1,13 +1,16 @@
 from datetime import datetime
 
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
+from rest_framework import serializers, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.settings import api_settings
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
@@ -17,7 +20,7 @@ except ModuleNotFoundError:
     BlacklistedToken = None
     OutstandingToken = None
 
-from .models import Department, DepartmentPosition, Employee
+from .models import Department, DepartmentPosition, Employee, EmployeeRoleAssignment
 from .serializers import (
     AdminEmployeeCreateSerializer,
     EmployeeDetailSerializer,
@@ -25,6 +28,62 @@ from .serializers import (
     UserSerializer,
 )
 from performance.services import ensure_initial_self_review, sync_employer_from_employee
+
+
+REFRESH_COOKIE_NAME = settings.SIMPLE_JWT.get('REFRESH_TOKEN_COOKIE_NAME', 'rasti_refresh_token')
+REFRESH_COOKIE_PATH = settings.SIMPLE_JWT.get('REFRESH_TOKEN_COOKIE_PATH', '/')
+REFRESH_COOKIE_DOMAIN = settings.SIMPLE_JWT.get('REFRESH_TOKEN_COOKIE_DOMAIN')
+REFRESH_COOKIE_SECURE = settings.SIMPLE_JWT.get('REFRESH_TOKEN_COOKIE_SECURE', True)
+REFRESH_COOKIE_SAMESITE = settings.SIMPLE_JWT.get('REFRESH_TOKEN_COOKIE_SAMESITE', 'Strict')
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=REFRESH_COOKIE_SECURE,
+        samesite=REFRESH_COOKIE_SAMESITE,
+        path=REFRESH_COOKIE_PATH,
+        domain=REFRESH_COOKIE_DOMAIN,
+        max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        domain=REFRESH_COOKIE_DOMAIN,
+        samesite=REFRESH_COOKIE_SAMESITE,
+    )
+
+
+class CookieTokenRefreshSerializer(TokenRefreshSerializer):
+    refresh = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        refresh_token = attrs.get('refresh') or (request.COOKIES.get(REFRESH_COOKIE_NAME) if request else None)
+        if not refresh_token:
+            raise serializers.ValidationError({'refresh': 'Refresh token is missing.'})
+        attrs['refresh'] = refresh_token
+        return super().validate(attrs)
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    serializer_class = CookieTokenRefreshSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = dict(serializer.validated_data)
+        rotated_refresh = validated.pop('refresh', None)
+        response = Response(validated, status=status.HTTP_200_OK)
+        refresh_value = rotated_refresh or request.COOKIES.get(REFRESH_COOKIE_NAME)
+        if refresh_value:
+            _set_refresh_cookie(response, refresh_value)
+        return response
 
 @extend_schema(
     request={
@@ -134,6 +193,15 @@ def register(request):
             hire_date=hire_date,
         )
 
+        if employee.department and employee.is_manager:
+            EmployeeRoleAssignment.objects.get_or_create(
+                employee=employee,
+                role=EmployeeRoleAssignment.Role.DEPARTMENT_HEAD,
+                organization=employee.department.organization,
+                department=employee.department,
+            )
+            employee.sync_role_from_assignments(commit=True)
+
         employer = sync_employer_from_employee(employee)
         pending_review = None
         if employer:
@@ -148,8 +216,7 @@ def register(request):
         
         refresh = RefreshToken.for_user(user)
         
-        return Response({
-            'refresh': str(refresh),
+        response = Response({
             'access': str(refresh.access_token),
             'user': UserSerializer(user).data,
             'employee_meta': {
@@ -157,6 +224,8 @@ def register(request):
                 'employer_id': employer.id if employer else None,
             },
         }, status=status.HTTP_201_CREATED)
+        _set_refresh_cookie(response, str(refresh))
+        return response
         
     except Exception as e:
         return Response(
@@ -235,12 +304,13 @@ def login(request):
     except Employee.DoesNotExist:
         pass
     
-    return Response({
-        'refresh': str(refresh),
+    response = Response({
         'access': str(refresh.access_token),
         'user': UserSerializer(user).data,
         'employee': employee_data
     })
+    _set_refresh_cookie(response, str(refresh))
+    return response
 
 from django.db import IntegrityError
 
@@ -261,7 +331,7 @@ from django.db import IntegrityError
 @permission_classes([IsAuthenticated])
 def logout(request):
     try:
-        refresh_token = request.data.get('refresh')
+        refresh_token = request.data.get('refresh') or request.COOKIES.get(REFRESH_COOKIE_NAME)
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
@@ -279,7 +349,9 @@ def logout(request):
                         pass
             except (AttributeError, TokenError):
                 pass
-        return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
+        response = Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
+        _clear_refresh_cookie(response)
+        return response
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

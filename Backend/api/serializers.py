@@ -4,6 +4,7 @@ from .models import (
     Department,
     DepartmentPosition,
     Employee,
+    EmployeeRoleAssignment,
     Goal,
     GoalEvaluationNotification,
     GoalParticipant,
@@ -11,6 +12,7 @@ from .models import (
     PotentialAssessment,
     SelfAssessment,
     Task,
+    Team,
     Feedback360,
     FinalReview,
 )
@@ -29,10 +31,15 @@ class DepartmentPositionSerializer(serializers.ModelSerializer):
 class DepartmentSerializer(serializers.ModelSerializer):
     employees_count = serializers.IntegerField(source='employee_set.count', read_only=True)
     positions = DepartmentPositionSerializer(many=True, required=False)
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True)
 
     class Meta:
         model = Department
-        fields = ['id', 'name', 'description', 'employees_count', 'positions']
+        fields = [
+            'id', 'name', 'description', 'organization', 'organization_name',
+            'parent', 'parent_name', 'employees_count', 'positions'
+        ]
 
     def create(self, validated_data):
         positions_data = validated_data.pop('positions', [])
@@ -54,7 +61,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         for index, payload in enumerate(positions_data):
             pos_id = payload.get('id')
             importance = payload.get('importance', index)
-            title = payload.get('title', '').strip()
+            title = (payload.get('title') or '').strip()
             if not title:
                 continue
 
@@ -77,37 +84,78 @@ class DepartmentSerializer(serializers.ModelSerializer):
             if not pos.employees.exists():
                 pos.delete()
 
+
+class TeamSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True)
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'description', 'department', 'department_name', 'parent', 'parent_name']
+
+
+class EmployeeRoleAssignmentSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    scope = serializers.SerializerMethodField()
+    target_employee_name = serializers.CharField(source='target_employee.user.get_full_name', read_only=True)
+
+    class Meta:
+        model = EmployeeRoleAssignment
+        fields = [
+            'id', 'role', 'role_display', 'scope', 'organization', 'department',
+            'team', 'position', 'target_employee', 'target_employee_name',
+            'is_active', 'assigned_at', 'revoked_at'
+        ]
+        read_only_fields = ['assigned_at', 'revoked_at']
+
+    def get_scope(self, obj):
+        return obj.describe_scope()
+
+
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.CharField(source='user.email', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True)
+    organization_name = serializers.CharField(source='department.organization.name', read_only=True)
     user_is_staff = serializers.BooleanField(source='user.is_staff', read_only=True)
     user_is_superuser = serializers.BooleanField(source='user.is_superuser', read_only=True)
     position_name = serializers.CharField(source='position.title', read_only=True)
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     can_manage_department = serializers.SerializerMethodField()
-    
+    team_name = serializers.CharField(source='team.name', read_only=True)
+    active_roles = serializers.SerializerMethodField()
+    team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all(), allow_null=True, required=False)
+
     class Meta:
         model = Employee
         fields = [
-            'id', 'user', 'department', 'department_name', 'position', 'position_title',
-            'position_name', 'role', 'role_display', 'is_manager', 'hire_date',
+            'id', 'user', 'department', 'department_name', 'organization_name', 'position', 'position_title',
+            'position_name', 'team', 'team_name', 'role', 'role_display', 'is_manager', 'hire_date',
             'full_name', 'email', 'username', 'user_is_staff', 'user_is_superuser',
-            'can_manage_department'
+            'can_manage_department', 'active_roles'
         ]
         extra_kwargs = {
             'user': {'read_only': True},
             'position_title': {'required': False, 'allow_blank': True},
             'position': {'required': False, 'allow_null': True},
+            'department': {'required': False, 'allow_null': True},
+            'team': {'required': False, 'allow_null': True},
         }
 
     def get_can_manage_department(self, obj):
-        if obj.role in [obj.Role.ADMIN, obj.Role.BUSINESS_PARTNER]:
+        if not obj.department_id:
+            return False
+        if obj.has_global_visibility():
             return True
-        if obj.role == obj.Role.MANAGER and obj.department_id:
-            return True
-        return False
+        return obj.active_role_assignments().filter(
+            role=EmployeeRoleAssignment.Role.DEPARTMENT_HEAD,
+            department_id=obj.department_id,
+        ).exists()
+
+    def get_active_roles(self, obj):
+        assignments = obj.active_role_assignments()
+        return EmployeeRoleAssignmentSerializer(assignments, many=True, context=self.context).data
 
     def update(self, instance, validated_data):
         position = validated_data.get('position')
@@ -115,16 +163,31 @@ class EmployeeSerializer(serializers.ModelSerializer):
             validated_data.setdefault('position_title', position.title)
         elif 'position' in validated_data and position is None:
             validated_data.setdefault('position_title', '')
+
+        if 'team' in validated_data:
+            team = validated_data['team']
+            target_department = validated_data.get('department', instance.department)
+            if team and target_department and team.department_id != target_department.id:
+                raise serializers.ValidationError({'team': 'Команда должна относиться к выбранному отделу.'})
+
         return super().update(instance, validated_data)
+
 
 class EmployeeDetailSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     department = DepartmentSerializer(read_only=True)
     position = DepartmentPositionSerializer(read_only=True)
-    
+    team = TeamSerializer(read_only=True)
+    role_assignments = serializers.SerializerMethodField()
+
     class Meta:
         model = Employee
         fields = '__all__'
+
+    def get_role_assignments(self, obj):
+        return EmployeeRoleAssignmentSerializer(
+            obj.active_role_assignments(), many=True, context=self.context
+        ).data
 
 
 class AdminEmployeeCreateSerializer(serializers.Serializer):
@@ -138,6 +201,11 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
     )
     department = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.all(), allow_null=True, required=False
+    )
+    team = serializers.PrimaryKeyRelatedField(
+        queryset=Team.objects.select_related('department'),
+        required=False,
+        allow_null=True,
     )
     is_manager = serializers.BooleanField(default=False)
     is_staff = serializers.BooleanField(default=False)
@@ -172,6 +240,7 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
         position = validated_data.pop('position', None)
         role = validated_data.pop('role', Employee.Role.EMPLOYEE)
         is_superuser = validated_data.pop('is_superuser', False)
+        team = validated_data.pop('team', None)
 
         email = validated_data['email']
         first_name = validated_data['first_name'].strip()
@@ -209,15 +278,28 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
             user.is_staff = True
             user.save(update_fields=['is_superuser', 'is_staff'])
 
+        if team and department and team.department_id != department.id:
+            raise serializers.ValidationError({'team': 'Команда должна относиться к выбранному отделу.'})
+
         employee = Employee.objects.create(
             user=user,
             department=department,
             position=position,
             position_title=position.title if position else 'Сотрудник',
+            team=team,
             role=role,
             is_manager=is_manager or role == Employee.Role.MANAGER,
             hire_date=hire_date or timezone.now().date(),
         )
+
+        if employee.department and (is_manager or role == Employee.Role.MANAGER):
+            EmployeeRoleAssignment.objects.get_or_create(
+                employee=employee,
+                role=EmployeeRoleAssignment.Role.DEPARTMENT_HEAD,
+                organization=employee.department.organization,
+                department=employee.department,
+            )
+            employee.sync_role_from_assignments(commit=True)
 
         return {
             'user': user,

@@ -1401,21 +1401,31 @@ def _managers_for_employer(employer: Employer) -> List[Employer]:
     if not employee_profile:
         return []
 
-    from api.models import Employee
+    from api.models import Employee, EmployeeRoleAssignment
 
-    manager_qs = Employee.objects.filter(
-        Q(role=Employee.Role.MANAGER)
-        | Q(role=Employee.Role.BUSINESS_PARTNER)
-        | Q(role=Employee.Role.ADMIN)
+    manager_qs = (
+        Employee.objects.select_related("department")
+        .prefetch_related("role_assignments")
+        .filter(
+            Q(role__in=[Employee.Role.ADMIN, Employee.Role.BUSINESS_PARTNER])
+            | Q(
+                role_assignments__role__in=EmployeeRoleAssignment.Role.leadership_roles(),
+                role_assignments__is_active=True,
+                role_assignments__revoked_at__isnull=True,
+            )
+        )
+        .distinct()
     )
 
-    if employee_profile.department_id:
-        manager_qs = manager_qs.filter(
-            Q(department_id=employee_profile.department_id)
-            | Q(role__in=[Employee.Role.BUSINESS_PARTNER, Employee.Role.ADMIN])
-        )
+    manager_user_ids: List[int] = []
+    for candidate in manager_qs:
+        if candidate.user_id is None:
+            continue
+        if candidate.user_id == employee_profile.user_id:
+            continue
+        if candidate.has_global_visibility() or candidate.can_manage_employee(employee_profile):
+            manager_user_ids.append(candidate.user_id)
 
-    manager_user_ids = [row for row in manager_qs.values_list("user_id", flat=True) if row]
     employer_qs = Employer.objects.filter(user_id__in=manager_user_ids)
 
     superusers = Employer.objects.filter(user__is_superuser=True)
@@ -1437,11 +1447,19 @@ def _team_employers_for_manager(manager: Employer) -> List[int]:
     if manager.user and manager.user.is_superuser:
         return list(Employer.objects.values_list("id", flat=True))
 
-    team_members = Employee.objects.filter(
-        Q(department_id=employee_profile.department_id)
-    ).exclude(id=employee_profile.id)
+    managed_ids = employee_profile.managed_employee_ids()
+    if employee_profile.has_global_visibility():
+        managed_ids = set(Employee.objects.exclude(pk=employee_profile.pk).values_list("id", flat=True))
 
-    team_user_ids = [row for row in team_members.values_list("user_id", flat=True) if row]
+    if not managed_ids:
+        return []
+
+    team_user_ids = [
+        row
+        for row in Employee.objects.filter(id__in=managed_ids).values_list("user_id", flat=True)
+        if row
+    ]
+
     return list(
         Employer.objects.filter(user_id__in=team_user_ids).values_list("id", flat=True)
     )
@@ -2023,9 +2041,11 @@ def sync_employer_from_employee(employee: "Employee") -> Optional[Employer]:
     ]
     fio = " ".join(fio_parts) or user.get_full_name() or user.username or email
 
+    position_label = employee.position.title if employee.position else (employee.position_title or "Сотрудник")
+
     defaults = {
         "fio": fio,
-        "position": employee.position or "Сотрудник",
+        "position": position_label,
         "date_of_employment": employee.hire_date,
     }
 
@@ -2045,8 +2065,8 @@ def sync_employer_from_employee(employee: "Employee") -> Optional[Employer]:
         employer.date_of_employment = employee.hire_date
         update_fields.append("date_of_employment")
 
-    if employee.position and employer.position != employee.position:
-        employer.position = employee.position
+    if employer.position != position_label:
+        employer.position = position_label
         update_fields.append("position")
 
     if update_fields:

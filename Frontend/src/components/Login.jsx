@@ -27,7 +27,6 @@ function Login() {
     try {
       const response = await login(formState.username, formState.password);
       localStorage.setItem('access_token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       localStorage.setItem('employee', JSON.stringify(response.data.employee));
       await refreshProfile();

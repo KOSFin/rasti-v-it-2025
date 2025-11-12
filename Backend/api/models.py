@@ -2,6 +2,18 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
+class Organization(models.Model):
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class DepartmentPosition(models.Model):
     department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='positions')
     title = models.CharField(max_length=200)
@@ -15,11 +27,50 @@ class DepartmentPosition(models.Model):
         return f"{self.department.name} • {self.title}"
 
 class Department(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='departments',
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children',
+    )
     
     def __str__(self):
         return self.name
+
+
+class Team(models.Model):
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='teams',
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subteams',
+    )
+
+    class Meta:
+        ordering = ['department__name', 'name']
+        unique_together = ['department', 'name']
+
+    def __str__(self) -> str:
+        return f"{self.department.name} • {self.name}"
+
 
 class Employee(models.Model):
     class Role(models.TextChoices):
@@ -38,6 +89,13 @@ class Employee(models.Model):
         blank=True,
         related_name='employees'
     )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='members',
+    )
     role = models.CharField(
         max_length=32,
         choices=Role.choices,
@@ -48,23 +106,133 @@ class Employee(models.Model):
     
     def __str__(self):
         position_label = self.position.title if self.position else self.position_title or '—'
-        return f"{self.user.get_full_name()} - {position_label}"
+        team_label = f" • {self.team.name}" if self.team_id else ''
+        return f"{self.user.get_full_name()} - {position_label}{team_label}"
 
     def save(self, *args, **kwargs):
-        if self.is_manager and self.role != self.Role.MANAGER:
-            self.role = self.Role.MANAGER
-
-        if self.user and self.user.is_superuser and self.role != self.Role.ADMIN:
+        if self.user and self.user.is_superuser:
             self.role = self.Role.ADMIN
 
-        if self.role == self.Role.MANAGER:
-            self.is_manager = True
-        else:
-            self.is_manager = False
+        if self.team and self.department and self.team.department_id != self.department_id:
+            self.team = None
 
         if self.position and not self.position_title:
             self.position_title = self.position.title
+
         super().save(*args, **kwargs)
+        if self.pk:
+            self.sync_role_from_assignments(commit=True)
+
+    def organization(self):
+        if self.department and self.department.organization:
+            return self.department.organization
+        return None
+
+    def active_role_assignments(self):
+        return self.role_assignments.filter(is_active=True, revoked_at__isnull=True)
+
+    def has_global_visibility(self) -> bool:
+        if self.user and self.user.is_superuser:
+            return True
+        if self.role in {self.Role.ADMIN, self.Role.BUSINESS_PARTNER}:
+            return True
+        assignments = self.active_role_assignments()
+        return assignments.filter(role__in=EmployeeRoleAssignment.Role.global_roles()).exists()
+
+    @property
+    def has_leadership_scope(self) -> bool:
+        if self.user and self.user.is_superuser:
+            return True
+        if self.role in {self.Role.ADMIN, self.Role.BUSINESS_PARTNER}:
+            return True
+        return self.active_role_assignments().filter(
+            role__in=EmployeeRoleAssignment.Role.leadership_roles()
+        ).exists()
+
+    def visible_employee_ids(self, include_self: bool = True) -> set[int]:
+        qs = Employee.objects.all()
+        if self.has_global_visibility():
+            return set(qs.values_list('id', flat=True))
+
+        visible_ids = set()
+        if include_self and self.pk:
+            visible_ids.add(self.pk)
+
+        assignments = list(self.active_role_assignments())
+        for assignment in assignments:
+            visible_ids.update(assignment.visible_employee_ids())
+
+        return visible_ids
+
+    def managed_employee_ids(self) -> set[int]:
+        managed = set()
+        if self.has_global_visibility():
+            managed.update(
+                Employee.objects.exclude(pk=self.pk).values_list('id', flat=True)
+            )
+        assignments = self.active_role_assignments()
+        for assignment in assignments:
+            managed.update(assignment.visible_employee_ids())
+        managed.discard(self.pk)
+        return managed
+
+    def managed_employee_ids(self) -> set[int]:
+        if self.has_global_visibility():
+            return set(
+                Employee.objects.exclude(pk=self.pk).values_list('id', flat=True)
+            )
+
+        managed_ids: set[int] = set()
+        for assignment in self.active_role_assignments().filter(
+            role__in=EmployeeRoleAssignment.Role.leadership_roles()
+        ):
+            managed_ids.update(assignment.visible_employee_ids())
+
+        managed_ids.discard(self.pk)
+        return managed_ids
+
+    def can_manage_employee(self, other: 'Employee | None') -> bool:
+        if other is None or not self.pk:
+            return False
+        if self.user and self.user.is_superuser:
+            return True
+        if self.role == self.Role.ADMIN:
+            return True
+        if self.role == self.Role.BUSINESS_PARTNER:
+            return True
+        if other.pk == self.pk:
+            return True
+        return other.pk in self.managed_employee_ids()
+
+    def sync_role_from_assignments(self, *, commit: bool = True) -> dict:
+        assignments = self.active_role_assignments()
+        has_leadership = assignments.filter(
+            role__in=EmployeeRoleAssignment.Role.leadership_roles()
+        ).exists()
+
+        desired_role = self.role
+        if self.user and self.user.is_superuser:
+            desired_role = self.Role.ADMIN
+        elif self.role == self.Role.BUSINESS_PARTNER:
+            desired_role = self.Role.BUSINESS_PARTNER
+        elif has_leadership:
+            desired_role = self.Role.MANAGER
+        elif desired_role == self.Role.MANAGER:
+            desired_role = self.Role.EMPLOYEE
+
+        updates = {}
+        if desired_role != self.role:
+            updates['role'] = desired_role
+            self.role = desired_role
+
+        if self.is_manager != has_leadership:
+            updates['is_manager'] = has_leadership
+            self.is_manager = has_leadership
+
+        if updates and commit and self.pk:
+            Employee.objects.filter(pk=self.pk).update(**updates)
+
+        return updates
 
 class Goal(models.Model):
     GOAL_TYPES = [
@@ -269,3 +437,206 @@ class FinalReview(models.Model):
     manager_summary = models.TextField()
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class EmployeeRoleAssignmentQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True, revoked_at__isnull=True)
+
+
+class EmployeeRoleAssignment(models.Model):
+    class Role(models.TextChoices):
+        ORGANIZATION_LEAD = 'organization_lead', 'Руководитель организации'
+        DEPARTMENT_HEAD = 'department_head', 'Руководитель отдела'
+        TEAM_LEAD = 'team_lead', 'Руководитель команды'
+        POSITION_LEAD = 'position_lead', 'Руководитель должности'
+        MENTOR = 'mentor', 'Наставник'
+        BUDDY = 'buddy', 'Бадди'
+
+        @classmethod
+        def leadership_roles(cls) -> tuple:
+            return (
+                cls.ORGANIZATION_LEAD,
+                cls.DEPARTMENT_HEAD,
+                cls.TEAM_LEAD,
+                cls.POSITION_LEAD,
+            )
+
+        @classmethod
+        def support_roles(cls) -> tuple:
+            return (cls.MENTOR, cls.BUDDY)
+
+        @classmethod
+        def global_roles(cls) -> tuple:
+            return (cls.ORGANIZATION_LEAD,)
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='role_assignments',
+    )
+    role = models.CharField(max_length=50, choices=Role.choices)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='role_assignments',
+        null=True,
+        blank=True,
+    )
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='role_assignments',
+        null=True,
+        blank=True,
+    )
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.CASCADE,
+        related_name='role_assignments',
+        null=True,
+        blank=True,
+    )
+    position = models.ForeignKey(
+        DepartmentPosition,
+        on_delete=models.CASCADE,
+        related_name='role_assignments',
+        null=True,
+        blank=True,
+    )
+    target_employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='support_assignments',
+    )
+    is_active = models.BooleanField(default=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    objects = EmployeeRoleAssignmentQuerySet.as_manager()
+
+    class Meta:
+        ordering = ['employee', 'role', 'assigned_at']
+        unique_together = (
+            'employee',
+            'role',
+            'organization',
+            'department',
+            'team',
+            'position',
+            'target_employee',
+        )
+        indexes = [
+            models.Index(fields=['role', 'is_active'], name='employee_role_active_idx'),
+        ]
+
+    def __str__(self) -> str:
+        scope = self.describe_scope()
+        return f"{self.employee.user.get_full_name()} → {self.get_role_display()} ({scope})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        scope_fields = {
+            'organization_id': self.organization_id,
+            'department_id': self.department_id,
+            'team_id': self.team_id,
+            'position_id': self.position_id,
+            'target_employee_id': self.target_employee_id,
+        }
+
+        leadership_roles = self.Role.leadership_roles()
+        support_roles = self.Role.support_roles()
+
+        if self.role in leadership_roles:
+            if self.role == self.Role.ORGANIZATION_LEAD and not self.organization_id:
+                raise ValidationError('Для роли руководителя организации необходимо указать организацию.')
+            if self.role == self.Role.DEPARTMENT_HEAD and not self.department_id:
+                raise ValidationError('Для роли руководителя отдела необходимо указать отдел.')
+            if self.role == self.Role.TEAM_LEAD and not self.team_id:
+                raise ValidationError('Для роли руководителя команды необходимо указать команду.')
+            if self.role == self.Role.POSITION_LEAD and not self.position_id:
+                raise ValidationError('Для роли руководителя должности необходимо указать должность.')
+        elif self.role in support_roles:
+            if not self.target_employee_id:
+                raise ValidationError('Для ролей наставника и бадди необходимо указать сотрудника.')
+        else:
+            raise ValidationError('Неизвестная роль.')
+
+        if self.team_id and self.department_id and self.team.department_id != self.department_id:
+            raise ValidationError('Команда должна относиться к выбранному отделу.')
+
+        if self.department and self.organization and self.department.organization_id != self.organization_id:
+            raise ValidationError('Отдел должен принадлежать выбранной организации.')
+
+        if self.team and self.organization and self.team.department.organization_id != self.organization_id:
+            raise ValidationError('Команда должна принадлежать выбранной организации.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+        self.employee.sync_role_from_assignments(commit=True)
+
+    def delete(self, *args, **kwargs):
+        employee = self.employee
+        super().delete(*args, **kwargs)
+        employee.sync_role_from_assignments(commit=True)
+
+    def active(self) -> bool:
+        return self.is_active and not self.revoked_at
+
+    def describe_scope(self) -> str:
+        if self.role == self.Role.ORGANIZATION_LEAD and self.organization:
+            return self.organization.name
+        if self.role == self.Role.DEPARTMENT_HEAD and self.department:
+            return self.department.name
+        if self.role == self.Role.TEAM_LEAD and self.team:
+            return self.team.name
+        if self.role == self.Role.POSITION_LEAD and self.position:
+            return self.position.title
+        if self.target_employee:
+            return self.target_employee.user.get_full_name()
+        return '—'
+
+    def visible_employee_ids(self) -> set[int]:
+        if not self.active():
+            return set()
+        if self.role == self.Role.ORGANIZATION_LEAD and self.organization_id:
+            return set(
+                Employee.objects.filter(
+                    department__organization_id=self.organization_id
+                ).values_list('id', flat=True)
+            )
+        if self.role == self.Role.DEPARTMENT_HEAD and self.department_id:
+            return set(
+                Employee.objects.filter(department_id=self.department_id).values_list('id', flat=True)
+            )
+        if self.role == self.Role.TEAM_LEAD and self.team_id:
+            return set(
+                Employee.objects.filter(team_id=self.team_id).values_list('id', flat=True)
+            )
+        if self.role == self.Role.POSITION_LEAD and self.position_id:
+            return set(
+                Employee.objects.filter(position_id=self.position_id).values_list('id', flat=True)
+            )
+        if self.role in self.Role.support_roles() and self.target_employee_id:
+            return {self.target_employee_id}
+        return set()
+
+    def covers_employee(self, employee: Employee) -> bool:
+        if not self.active():
+            return False
+        if self.role == self.Role.ORGANIZATION_LEAD and self.organization_id:
+            org = employee.organization()
+            return org and org.id == self.organization_id
+        if self.role == self.Role.DEPARTMENT_HEAD and self.department_id:
+            return employee.department_id == self.department_id
+        if self.role == self.Role.TEAM_LEAD and self.team_id:
+            return employee.team_id == self.team_id
+        if self.role == self.Role.POSITION_LEAD and self.position_id:
+            return employee.position_id == self.position_id
+        if self.role in self.Role.support_roles() and self.target_employee_id:
+            return employee.id == self.target_employee_id
+        return False

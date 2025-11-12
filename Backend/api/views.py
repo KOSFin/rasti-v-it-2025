@@ -1,8 +1,8 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.db.models import Q, Avg, Count
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -30,6 +30,84 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         return super().get_permissions()
 
+
+class TeamViewSet(viewsets.ModelViewSet):
+    queryset = Team.objects.select_related('department', 'parent').all()
+    serializer_class = TeamSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['department', 'parent']
+    search_fields = ['name', 'department__name']
+    ordering_fields = ['name']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [permission() for permission in self.permission_classes]
+        if self.request.user.is_superuser:
+            return [permission() for permission in self.permission_classes]
+        employee = Employee.objects.filter(user=self.request.user).first()
+        if employee and employee.has_global_visibility():
+            return [permission() for permission in self.permission_classes]
+        return [IsAdminUser()]
+
+
+class EmployeeRoleAssignmentViewSet(viewsets.ModelViewSet):
+    queryset = EmployeeRoleAssignment.objects.select_related(
+        'employee__user',
+        'organization',
+        'department',
+        'team',
+        'position',
+        'target_employee__user',
+    ).all()
+    serializer_class = EmployeeRoleAssignmentSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = [
+        'employee', 'role', 'organization', 'department', 'team', 'position',
+        'target_employee', 'is_active'
+    ]
+    search_fields = [
+        'employee__user__first_name',
+        'employee__user__last_name',
+        'employee__user__username',
+        'team__name',
+        'department__name',
+    ]
+    ordering_fields = ['assigned_at', 'role']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        employee = Employee.objects.filter(user=user).select_related('department').first()
+        if not employee:
+            return self.queryset.none()
+        if employee.has_global_visibility():
+            return self.queryset
+        return self.queryset.filter(
+            Q(employee=employee) | Q(target_employee=employee)
+        ).distinct()
+
+    def perform_create(self, serializer):
+        self._ensure_admin_rights()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._ensure_admin_rights()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._ensure_admin_rights()
+        instance.delete()
+
+    def _ensure_admin_rights(self):
+        if self.request.user.is_superuser:
+            return
+        employee = Employee.objects.filter(user=self.request.user).first()
+        if not employee or not employee.has_global_visibility():
+            raise PermissionDenied('Назначать и изменять роли могут только администраторы или пользователи с глобальными правами.')
+
 @extend_schema_view(
     list=extend_schema(summary='Список сотрудников', tags=['Employees']),
     create=extend_schema(summary='Создать сотрудника', tags=['Employees']),
@@ -43,8 +121,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['department', 'role']
-    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'position_title']
+    filterset_fields = ['department', 'team', 'role', 'role_assignments__role']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'position_title', 'team__name']
     ordering_fields = ['hire_date', 'position_title']
     manager_update_actions = {'update', 'partial_update'}
 
@@ -64,13 +142,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if not employee:
             return self.queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return self.queryset
-        if employee.role == Employee.Role.MANAGER:
-            return self.queryset.filter(
-                Q(department=employee.department) | Q(pk=employee.pk)
-            )
-        return self.queryset.filter(pk=employee.pk)
+
+        visible_ids = employee.visible_employee_ids()
+        if not visible_ids:
+            return self.queryset.filter(pk=employee.pk)
+        return self.queryset.filter(pk__in=visible_ids)
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -79,15 +157,24 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def managers(self, request):
-        managers = Employee.objects.filter(is_manager=True)
+        leadership_roles = EmployeeRoleAssignment.Role.leadership_roles()
+        manager_ids = EmployeeRoleAssignment.objects.active().filter(
+            role__in=leadership_roles
+        ).values_list('employee_id', flat=True)
+        managers = Employee.objects.filter(
+            Q(id__in=manager_ids) | Q(role__in=[Employee.Role.ADMIN, Employee.Role.BUSINESS_PARTNER])
+        ).distinct()
         serializer = self.get_serializer(managers, many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def team(self, request, pk=None):
         employee = self.get_object()
-        team = Employee.objects.filter(department=employee.department).exclude(id=employee.id)
-        serializer = self.get_serializer(team, many=True)
+        if employee.team_id:
+            teammates = Employee.objects.filter(team_id=employee.team_id).exclude(id=employee.id)
+        else:
+            teammates = Employee.objects.filter(department=employee.department).exclude(id=employee.id)
+        serializer = self.get_serializer(teammates, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
@@ -96,9 +183,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if not employee:
             return Response([], status=status.HTTP_200_OK)
 
-        colleagues = Employee.objects.select_related('user', 'department', 'position').filter(
-            department=employee.department
-        ).exclude(pk=employee.pk).order_by('user__last_name', 'user__first_name')
+        base_queryset = Employee.objects.select_related('user', 'department', 'position', 'team')
+        if employee.team_id:
+            colleagues = base_queryset.filter(team_id=employee.team_id)
+        else:
+            colleagues = base_queryset.filter(department=employee.department)
+
+        colleagues = colleagues.exclude(pk=employee.pk).order_by('user__last_name', 'user__first_name')
 
         serializer = self.get_serializer(colleagues, many=True)
         return Response(serializer.data)
@@ -115,14 +206,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         current_employee = self._current_employee()
         if not current_employee:
             raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
-        if current_employee.role == Employee.Role.BUSINESS_PARTNER:
-            raise ValidationError({'detail': 'У вас нет прав для изменения данных сотрудников.'})
-        if current_employee.role != Employee.Role.MANAGER:
-            if request.method in ['PUT', 'PATCH'] and employee and employee.pk == current_employee.pk:
-                return True
+        if employee and employee.pk == current_employee.pk:
+            return True
+        if not current_employee.can_manage_employee(employee):
             raise ValidationError({'detail': 'Недостаточно прав.'})
-        if employee and employee.department_id != current_employee.department_id and employee.pk != current_employee.pk:
-            raise ValidationError({'detail': 'Можно редактировать только сотрудников своего отдела.'})
         return True
 
     def create(self, request, *args, **kwargs):
@@ -162,15 +249,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         is_superuser = data.pop('is_superuser', None)
         is_staff = data.pop('is_staff', None)
-        new_role = data.get('role')
-
-        if new_role and not request.user.is_superuser:
-            current_employee = self._current_employee()
-            allowed_roles = {Employee.Role.EMPLOYEE, Employee.Role.MANAGER}
-            if current_employee and current_employee.role != Employee.Role.MANAGER:
-                allowed_roles = {Employee.Role.EMPLOYEE}
-            if new_role not in allowed_roles:
-                return Response({'detail': 'Вы не можете назначить выбранную роль.'}, status=status.HTTP_403_FORBIDDEN)
+        if 'role' in data and not request.user.is_superuser:
+            data.pop('role')
 
         serializer = self.get_serializer(employee, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -281,21 +361,14 @@ class GoalViewSet(viewsets.ModelViewSet):
         if not employee:
             return queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return queryset
 
-        if employee.role == Employee.Role.MANAGER:
-            return queryset.filter(
-                Q(goal_participants__employee__department=employee.department) |
-                Q(created_by=employee) |
-                Q(evaluation_notifications__recipient=employee)
-            ).distinct()
+        visible_ids = employee.visible_employee_ids()
+        filters = Q(goal_participants__employee_id__in=visible_ids) | Q(evaluation_notifications__recipient=employee)
+        filters |= Q(created_by=employee)
 
-        return queryset.filter(
-            Q(goal_participants__employee=employee) |
-            Q(created_by=employee) |
-            Q(evaluation_notifications__recipient=employee)
-        ).distinct()
+        return queryset.filter(filters).distinct()
     
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())
@@ -346,13 +419,13 @@ class GoalViewSet(viewsets.ModelViewSet):
             creator = current_employee
 
         invalid = []
-        if creator and creator.role == Employee.Role.MANAGER:
+        if creator and not user.is_superuser and not creator.has_global_visibility():
             invalid = [
                 participant for participant in participants_ordered
-                if participant.department_id != creator.department_id
+                if participant.pk != creator.pk and not creator.can_manage_employee(participant)
             ]
         if invalid:
-            raise ValidationError({'participants': 'Можно назначать цель только сотрудникам своего отдела.'})
+            raise ValidationError({'participants': 'Можно назначать цель только сотрудникам в вашей зоне ответственности.'})
 
         if not participants_ordered and creator and creator.role != Employee.Role.BUSINESS_PARTNER:
             participants_ordered = [creator]
@@ -399,13 +472,13 @@ class GoalViewSet(viewsets.ModelViewSet):
         if participant_ids is not None:
             participants_ordered = self._ordered_participants(participant_ids)
 
-            if current_employee and current_employee.role == Employee.Role.MANAGER and not user.is_superuser:
+            if current_employee and not user.is_superuser and not current_employee.has_global_visibility():
                 invalid = [
                     participant for participant in participants_ordered
-                    if participant.department_id != current_employee.department_id
+                    if participant.pk != current_employee.pk and not current_employee.can_manage_employee(participant)
                 ]
                 if invalid:
-                    raise ValidationError({'participants': 'Можно назначать цель только сотрудникам своего отдела.'})
+                    raise ValidationError({'participants': 'Можно назначать цель только сотрудникам в вашей зоне ответственности.'})
 
             if not participants_ordered:
                 raise ValidationError({'participants': 'Необходимо указать хотя бы одного участника цели.'})
@@ -504,16 +577,15 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not employee:
             return base_queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return base_queryset
 
-        if employee.role == Employee.Role.MANAGER:
-            return base_queryset.filter(
-                goal__goal_participants__employee__department=employee.department
-            ).distinct()
+        visible_ids = employee.visible_employee_ids()
+        if not visible_ids:
+            return base_queryset.filter(goal__goal_participants__employee=employee).distinct()
 
         return base_queryset.filter(
-            goal__goal_participants__employee=employee
+            goal__goal_participants__employee_id__in=visible_ids
         ).distinct()
     
     def perform_update(self, serializer):
@@ -527,11 +599,15 @@ class TaskViewSet(viewsets.ModelViewSet):
             if not employee:
                 raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
 
-            if employee.role == Employee.Role.MANAGER:
-                if not task.goal.participants.filter(department=employee.department).exists():
-                    raise ValidationError({'detail': 'Можно обновлять задачи только своего отдела.'})
-            elif not task.goal.participants.filter(pk=employee.pk).exists():
-                raise ValidationError({'detail': 'Вы не участник этой цели.'})
+            if not employee.has_global_visibility():
+                participants = list(task.goal.participants.select_related('department', 'team'))
+                participant_ids = {participant.pk for participant in participants}
+                if employee.pk not in participant_ids:
+                    can_manage = any(
+                        employee.can_manage_employee(participant) for participant in participants
+                    )
+                    if not can_manage:
+                        raise ValidationError({'detail': 'Недостаточно прав для изменения задачи.'})
 
         is_completed = serializer.validated_data.get('is_completed', task.is_completed)
         completed_by = serializer.validated_data.get('completed_by', None)
@@ -568,16 +644,16 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return SelfAssessment.objects.select_related('goal', 'employee')
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
-            return SelfAssessment.objects.select_related('goal', 'employee')
+        base_queryset = SelfAssessment.objects.select_related('goal', 'employee')
 
-        if employee.role == Employee.Role.MANAGER:
-            return SelfAssessment.objects.filter(
-                Q(employee__department=employee.department) |
-                Q(goal__goal_participants__employee=employee)
-            ).select_related('goal', 'employee').distinct()
+        if employee.has_global_visibility():
+            return base_queryset
 
-        return SelfAssessment.objects.filter(employee=employee).select_related('goal', 'employee')
+        visible_ids = employee.visible_employee_ids()
+        return base_queryset.filter(
+            Q(employee_id__in=visible_ids) |
+            Q(goal__goal_participants__employee_id__in=visible_ids)
+        ).distinct()
     
     @action(detail=False, methods=['get'])
     def pending(self, request):
@@ -706,29 +782,27 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
         if not employee:
             return queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return queryset
 
-        if employee.role == Employee.Role.MANAGER:
-            return queryset.filter(
-                Q(manager=employee) | Q(employee__department=employee.department)
-            ).distinct()
-
-        return queryset.filter(employee=employee)
+        visible_ids = employee.visible_employee_ids()
+        return queryset.filter(
+            Q(manager=employee) |
+            Q(employee_id__in=visible_ids)
+        ).distinct()
     
     @action(detail=False, methods=['get'])
     def my_team(self, request):
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
-        if not employee or employee.role != Employee.Role.MANAGER:
+        if not employee or not employee.has_leadership_scope:
             return Response(
-                {'error': 'Only managers can access this endpoint'},
+                {'error': 'Доступ разрешен только руководителям.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        team = Employee.objects.filter(
-            department=employee.department
-        ).exclude(id=employee.id)
+        team_ids = employee.managed_employee_ids()
+        team = Employee.objects.filter(id__in=team_ids)
         serializer = EmployeeSerializer(team, many=True)
         return Response(serializer.data)
     
@@ -739,8 +813,8 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
         if not employee and not user.is_superuser:
             raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
 
-        if not user.is_superuser and employee.role != Employee.Role.MANAGER:
-            raise PermissionError('Only managers can create reviews')
+        if not user.is_superuser and (not employee or not employee.has_leadership_scope):
+            raise PermissionError('Создавать отзывы могут только руководители.')
         
         data = serializer.validated_data
         results_score = min(data['results_achievement'] // 4, 3)
@@ -751,9 +825,8 @@ class ManagerReviewViewSet(viewsets.ModelViewSet):
         review_employee = data['employee']
         goal = data['goal']
 
-        if employee and employee.role == Employee.Role.MANAGER:
-            if review_employee.department_id != employee.department_id:
-                raise ValidationError({'employee': 'Можно оценивать только сотрудников своего отдела.'})
+        if employee and not employee.has_global_visibility() and not employee.can_manage_employee(review_employee):
+            raise ValidationError({'employee': 'Можно оценивать только сотрудников в вашей зоне ответственности.'})
         if not goal.participants.filter(pk=review_employee.pk).exists():
             raise ValidationError({'goal': 'Сотрудник не участвует в указанной цели.'})
 
@@ -777,13 +850,15 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         if not employee:
             return queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return queryset
 
-        if employee.role == Employee.Role.MANAGER:
-            return queryset.filter(manager=employee)
-
-        return queryset.filter(employee=employee)
+        managed_ids = employee.managed_employee_ids()
+        return queryset.filter(
+            Q(manager=employee) |
+            Q(employee_id__in=managed_ids) |
+            Q(employee=employee)
+        ).distinct()
     
     @action(detail=False, methods=['get'])
     def nine_box_matrix(self, request):
@@ -794,15 +869,16 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
             assessments = PotentialAssessment.objects.all().select_related('employee', 'employee__user')
         elif not employee:
             return Response([], status=status.HTTP_200_OK)
-        elif employee.role == Employee.Role.BUSINESS_PARTNER:
+        elif employee.has_global_visibility():
             assessments = PotentialAssessment.objects.all().select_related('employee', 'employee__user')
-        elif employee.role == Employee.Role.MANAGER:
+        elif employee.has_leadership_scope:
+            managed_ids = employee.managed_employee_ids()
             assessments = PotentialAssessment.objects.filter(
-                manager=employee
+                Q(manager=employee) | Q(employee_id__in=managed_ids)
             ).select_related('employee', 'employee__user')
         else:
             return Response(
-                {'error': 'Only managers or бизнес-партнеры могут просматривать матрицу'},
+                {'error': 'Доступ к матрице открыт только руководителям и пользователям с расширенными правами.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -827,8 +903,8 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         if not employee and not user.is_superuser:
             raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
 
-        if not user.is_superuser and employee.role != Employee.Role.MANAGER:
-            raise PermissionError('Only managers can create potential assessments')
+        if not user.is_superuser and (not employee or not employee.has_leadership_scope):
+            raise PermissionError('Создавать оценки потенциала могут только руководители.')
         
         data = serializer.validated_data
         
@@ -861,6 +937,10 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         nine_box_x = min(performance_score // 2, 2)
         nine_box_y = min(potential_score // 5, 2)
         
+        target_employee = data['employee']
+        if employee and not employee.has_global_visibility() and not employee.can_manage_employee(target_employee):
+            raise ValidationError({'employee': 'Можно оценивать только сотрудников в вашей зоне ответственности.'})
+
         serializer.save(
             manager=employee if employee else None,
             performance_score=performance_score,
@@ -923,13 +1003,11 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
         if not employee:
             return queryset.none()
 
-        if employee.role == Employee.Role.BUSINESS_PARTNER:
+        if employee.has_global_visibility():
             return queryset
 
-        if employee.role == Employee.Role.MANAGER:
-            return queryset.filter(employee__department=employee.department)
-
-        return queryset.filter(employee=employee)
+        visible_ids = employee.visible_employee_ids()
+        return queryset.filter(employee_id__in=visible_ids)
     
     @action(detail=True, methods=['post'])
     def calculate_final_score(self, request, pk=None):
@@ -975,13 +1053,14 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
             reviews = FinalReview.objects.all()
         elif not employee:
             return Response({}, status=status.HTTP_200_OK)
-        elif employee.role == Employee.Role.BUSINESS_PARTNER:
+        elif employee.has_global_visibility():
             reviews = FinalReview.objects.all()
-        elif employee.role == Employee.Role.MANAGER:
-            reviews = FinalReview.objects.filter(employee__department=employee.department)
+        elif employee.has_leadership_scope:
+            visible_ids = employee.visible_employee_ids()
+            reviews = FinalReview.objects.filter(employee_id__in=visible_ids)
         else:
             return Response(
-                {'error': 'Только менеджеры или бизнес-партнеры могут просматривать статистику'},
+                {'error': 'Статистика доступна только руководителям и пользователям с расширенными правами.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 

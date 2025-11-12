@@ -9,7 +9,6 @@ services:
       POSTGRES_DB: rasti_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    # Remove external port exposure - only accessible internally
     # ports:
     #   - "5432:5432"
     healthcheck:

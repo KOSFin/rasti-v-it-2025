@@ -53,7 +53,7 @@ export const register = (userData) =>
   api.post('/api/auth/register/', userData);
 
 export const logout = (refreshToken) => 
-  api.post('/api/auth/logout/', { refresh: refreshToken });
+  api.post('/api/auth/logout/', refreshToken ? { refresh: refreshToken } : {});
 
 export const getCurrentUser = () => 
   api.get('/api/auth/me/');

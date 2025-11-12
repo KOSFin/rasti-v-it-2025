@@ -144,12 +144,9 @@ class SkillReviewOverviewView(APIView):
                     )
 
                 if target_employer.id != employer.id:
-                    allowed_roles = {
-                        Employee.Role.MANAGER,
-                        Employee.Role.BUSINESS_PARTNER,
-                        Employee.Role.ADMIN,
-                    }
-                    if not employee or employee.role not in allowed_roles:
+                    if not employee or not (
+                        employee.has_leadership_scope or employee.has_global_visibility()
+                    ):
                         return Response(
                             {"detail": "Недостаточно прав для просмотра данных другого сотрудника."},
                             status=status.HTTP_403_FORBIDDEN,
@@ -204,12 +201,9 @@ class SkillReviewManagerQueueView(APIView):
             )
 
         if not request.user.is_superuser:
-            allowed_roles = {
-                Employee.Role.MANAGER,
-                Employee.Role.ADMIN,
-                Employee.Role.BUSINESS_PARTNER,
-            }
-            if not employee or employee.role not in allowed_roles:
+            if not employee or not (
+                employee.has_leadership_scope or employee.has_global_visibility()
+            ):
                 return Response(
                     {"detail": "Недостаточно прав для просмотра очереди тестов."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -254,12 +248,9 @@ class SkillReviewFeedbackView(APIView):
             )
 
         if not request.user.is_superuser:
-            allowed_roles = {
-                Employee.Role.MANAGER,
-                Employee.Role.ADMIN,
-                Employee.Role.BUSINESS_PARTNER,
-            }
-            if not employee or employee.role not in allowed_roles:
+            if not employee or not (
+                employee.has_leadership_scope or employee.has_global_visibility()
+            ):
                 return Response(
                     {"detail": "Недостаточно прав для отправки фидбека."},
                     status=status.HTTP_403_FORBIDDEN,

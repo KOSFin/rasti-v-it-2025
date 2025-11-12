@@ -14,12 +14,8 @@ const Header = () => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-
     try {
-      if (refreshToken) {
-        await logout(refreshToken);
-      }
+      await logout();
     } catch (error) {
       console.error('Не удалось корректно завершить сессию', error);
     } finally {
