@@ -30,11 +30,11 @@ def bootstrap_role_assignments(apps, schema_editor):
             department=department,
         )
 
-        
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0008_adjust_index_names'),
+        ('api', '0004_repair_employee_position_schema'),
     ]
 
     operations = [
