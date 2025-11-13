@@ -20,29 +20,6 @@
   height: 18px;
 }
 
-.notification-button .icon-visual,
-.notification-button .icon-emoji {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-}
-
-.notification-button .icon-emoji {
-  display: none;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.notification-button.fallback .icon-visual {
-  display: none;
-}
-
-.notification-button.fallback .icon-emoji {
-  display: inline-flex;
-}
-
 .notification-button:hover,
 .notification-button.active {
   color: var(--color-accent);
@@ -197,8 +174,6 @@
     transform: translateY(0);
   }
 }
-<<<<<<< HEAD
-
 @media (max-width: 768px) {
   .notification-button {
     width: 36px;
@@ -208,13 +183,6 @@
   .notification-button svg {
     width: 16px;
     height: 16px;
-  }
-
-  .notification-button .icon-visual,
-  .notification-button .icon-emoji {
-    width: 16px;
-    height: 16px;
-    font-size: 16px;
   }
 
   .notification-badge {
@@ -266,5 +234,3 @@
     max-height: 240px;
   }
 }
-=======
->>>>>>> parent of 847b383 (mobile v!)

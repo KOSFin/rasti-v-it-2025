@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   FiHome,
@@ -20,7 +20,7 @@ import { getGoals, getTasks, updateTask } from '../../api/services';
 import { useAuth } from '../../contexts/AuthContext';
 import './Sidebar.css';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen = false, onClose = () => {} }) => {
   const { employee, user } = useAuth();
   const [goals, setGoals] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -66,6 +66,23 @@ const Sidebar = () => {
   useEffect(() => {
     fetchSidebarData();
   }, [role]);
+
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   const goalById = useMemo(() => {
     return goals.reduce((acc, goal) => {
@@ -180,8 +197,15 @@ const Sidebar = () => {
     return sections.filter((section) => section.items.length > 0);
   }, [canSeeNineBox, isAdmin, isManager]);
 
+  const handleNavClick = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
+      <button type="button" className="sidebar-close-btn" onClick={onClose} aria-label="Закрыть меню">
+        X
+      </button>
       <nav className="sidebar-nav">
         {navSections.map((section) => (
           <div key={section.label} className="sidebar-section">
@@ -192,6 +216,7 @@ const Sidebar = () => {
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                  onClick={handleNavClick}
                 >
                   <item.icon size={18} />
                   <span>{item.label}</span>

@@ -1,19 +1,15 @@
-<<<<<<< HEAD
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-=======
->>>>>>> parent of 847b383 (mobile v!)
 import Header from './Header';
 import Sidebar from './Sidebar';
 import './Layout.css';
 
 const Layout = ({ children }) => {
-<<<<<<< HEAD
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
 
   const toggleMobileMenu = () => {
-    setMobileMenuOpen(prev => !prev);
+    setMobileMenuOpen((prev) => !prev);
   };
 
   const closeMobileMenu = () => {
@@ -61,17 +57,15 @@ const Layout = ({ children }) => {
   return (
     <div className={`layout ${mobileMenuOpen ? 'menu-open' : ''}`}>
       <Header onMenuToggle={toggleMobileMenu} />
-=======
-  return (
-    <div className="layout">
-      <Header />
->>>>>>> parent of 847b383 (mobile v!)
       <div className="layout-container">
-        <Sidebar />
-        <main className="main-content">
+        <Sidebar isOpen={mobileMenuOpen} onClose={closeMobileMenu} />
+        <main className="main-content" role="main">
           {children}
         </main>
       </div>
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={closeMobileMenu} role="presentation" />
+      )}
     </div>
   );
 };

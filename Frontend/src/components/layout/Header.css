@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 90;
-  background: linear-gradient(120deg, rgba(255, 107, 53, 0.06) 0%, rgba(255, 107, 53, 0.0) 45%), var(--bg-secondary);
+  background: linear-gradient(120deg, rgba(255, 107, 53, 0.06) 0%, rgba(255, 107, 53, 0) 45%), var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(12px);
 }
@@ -14,6 +14,31 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.mobile-menu-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-primary);
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mobile-menu-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--color-accent);
+}
+
+.mobile-menu-btn svg {
+  width: 24px;
+  height: 24px;
 }
 
 .brand-block {
@@ -72,35 +97,11 @@
   align-items: center;
   justify-content: center;
   transition: all 0.25s ease;
-  position: relative;
 }
 
 .icon-btn svg {
   width: 18px;
   height: 18px;
-}
-
-.icon-btn .icon-visual,
-.icon-btn .icon-emoji {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-}
-
-.icon-btn .icon-emoji {
-  display: none;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.icon-btn.show-fallback .icon-visual {
-  display: none;
-}
-
-.icon-btn.show-fallback .icon-emoji {
-  display: inline-flex;
 }
 
 .icon-btn:hover {
@@ -224,30 +225,107 @@
   color: #fff;
 }
 
-@media (max-width: 768px) {
-  .header-content {
-    padding: 0 18px;
-  }
-
+@media (max-width: 1024px) {
   .brand-tag {
     display: none;
   }
+}
 
-  .icon-btn .icon-visual,
-  .icon-btn .icon-emoji {
+@media (max-width: 768px) {
+  .header-content {
+    padding: 0 18px;
+    height: 64px;
+    gap: 10px;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .brand-name {
+    font-size: 14px;
+  }
+
+  .header-actions {
+    gap: 10px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .icon-btn svg {
     width: 16px;
     height: 16px;
-    font-size: 16px;
   }
 
   .profile-chip {
-    padding-right: 10px;
+    padding: 6px 10px 6px 6px;
+  }
+
+  .profile-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .profile-context {
+    display: none;
+  }
+
+  .profile-dropdown {
+    right: 0;
+    width: calc(100vw - 24px);
+    max-width: 320px;
   }
 }
 
 @media (max-width: 640px) {
   .brand-meta {
     display: none;
+  }
+
+  .brand-block {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-content {
+    padding: 0 10px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .icon-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .profile-avatar {
+    width: 30px;
+    height: 30px;
   }
 }
 

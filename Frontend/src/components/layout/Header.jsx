@@ -1,19 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../../api/services';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import { IconMoon, IconSun, IconUser, IconLogout } from './Icons';
-import useIconFallback from '../../hooks/useIconFallback';
 import './Header.css';
 
-const Header = () => {
+const Header = ({ onMenuToggle = () => {} }) => {
   const [showProfile, setShowProfile] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { user, employee, signOut } = useAuth();
   const navigate = useNavigate();
-  const [themeButtonRef, showThemeFallback] = useIconFallback(theme);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    if (!showProfile) {
+      return undefined;
+    }
+
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfile(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfile]);
 
   const handleLogout = async () => {
     try {
@@ -31,6 +47,17 @@ const Header = () => {
   return (
     <header className="header">
       <div className="header-content">
+        <button
+          type="button"
+          className="mobile-menu-btn"
+          onClick={onMenuToggle}
+          aria-label="Открыть меню"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+        </button>
+
         <div className="brand-block">
           <div className="brand-mark">RV</div>
           <div className="brand-meta">
@@ -42,30 +69,16 @@ const Header = () => {
         <div className="header-actions">
           <NotificationBell />
           <button
-            ref={themeButtonRef}
             onClick={toggleTheme}
             type="button"
-            className={`icon-btn${showThemeFallback ? ' show-fallback' : ''}`}
+            className="icon-btn"
             title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
             aria-label={theme === 'dark' ? 'Переключить на светлую тему' : 'Переключить на темную тему'}
           >
-<<<<<<< HEAD
-            <span className="icon-visual" aria-hidden="true">
-              {theme === 'dark' ? (
-                <IconSun size={18} />
-              ) : (
-                <IconMoon size={18} />
-              )}
-            </span>
-            <span className="icon-emoji" aria-hidden="true">
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </span>
-=======
             {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
->>>>>>> parent of 847b383 (mobile v!)
           </button>
 
-          <div className="profile-menu-wrapper">
+          <div className="profile-menu-wrapper" ref={profileRef}>
             <button
               onClick={() => setShowProfile((prev) => !prev)}
               className="profile-chip"
