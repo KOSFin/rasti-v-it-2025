@@ -124,6 +124,125 @@
   bottom: 0;
   background: var(--card-bg);
 }
+
+.goal-objective-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+}
+
+.goal-objective-block h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.goal-objective-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.goal-objective-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.goal-objective-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.goal-objective-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.goal-objective-card strong {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.goal-objective-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.goal-objective-control input[type='number'],
+.goal-objective-control input[type='text'] {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.goal-objective-control.slider input[type='range'] {
+  width: 100%;
+}
+
+.goal-objective-control.slider .slider-value {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.goal-objective-control.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.goal-objective-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.goal-objective-control.boolean {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.goal-objective-error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  border: 1px solid rgba(244, 67, 54, 0.35);
+  background: rgba(244, 67, 54, 0.12);
+  color: var(--color-error);
+  font-size: 0.85rem;
+}
+
+.goal-objective-loading {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .goal-objective-grid {
+    grid-template-columns: 1fr;
+  }
+}
 /* GoalEvaluationModal.css */
 
 .evaluation-modal {

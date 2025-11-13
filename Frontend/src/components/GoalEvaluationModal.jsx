@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getAssessmentQuestionBank } from '../api/services';
 import './GoalEvaluationModal.css';
 
 const DEFAULT_FORM = {
@@ -12,10 +13,80 @@ const gradeOptions = Array.from({ length: 11 }, (_, index) => index);
 
 const GoalEvaluationModal = ({ goal, notification, saving = false, error = '', onSubmit, onClose }) => {
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [objectiveQuestions, setObjectiveQuestions] = useState([]);
+  const [objectiveAnswers, setObjectiveAnswers] = useState({});
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [questionsError, setQuestionsError] = useState('');
 
   useEffect(() => {
     setForm(DEFAULT_FORM);
+    setObjectiveAnswers({});
+    setObjectiveQuestions([]);
+    setQuestionsError('');
   }, [goal?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadQuestions = async () => {
+      if (!goal?.id) {
+        setObjectiveQuestions([]);
+        setObjectiveAnswers({});
+        return;
+      }
+
+      setQuestionsLoading(true);
+      setQuestionsError('');
+
+      try {
+        const params = { context: 'feedback_360' };
+        if (goal?.department_id) {
+          params.department = goal.department_id;
+        }
+        const response = await getAssessmentQuestionBank(params);
+        const list = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.data?.results)
+          ? response.data.results
+          : [];
+
+        if (!cancelled) {
+          setObjectiveQuestions(list);
+          const defaults = {};
+          list.forEach((question) => {
+            if (question.answer_type === 'scale') {
+              const max = Number(question.max_score || 10);
+              defaults[question.id] = Math.round(max / 2);
+            } else if (question.answer_type === 'numeric') {
+              defaults[question.id] = '';
+            } else if (question.answer_type === 'boolean') {
+              defaults[question.id] = false;
+            } else {
+              defaults[question.id] = '';
+            }
+          });
+          setObjectiveAnswers(defaults);
+        }
+      } catch (err) {
+        console.error('Не удалось загрузить вопросы для оценки 360', err);
+        if (!cancelled) {
+          setObjectiveQuestions([]);
+          setObjectiveAnswers({});
+          setQuestionsError('Не удалось загрузить пакет объективных вопросов.');
+        }
+      } finally {
+        if (!cancelled) {
+          setQuestionsLoading(false);
+        }
+      }
+    };
+
+    loadQuestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [goal?.id, goal?.department_id]);
 
   const completedTasks = useMemo(() => {
     if (!goal?.tasks) {
@@ -38,10 +109,17 @@ const GoalEvaluationModal = ({ goal, notification, saving = false, error = '', o
       return;
     }
 
+    const objectivePayload = objectiveQuestions.map((question) => ({
+      question_id: question.id,
+      answer: formatObjectiveAnswer(question, objectiveAnswers[question.id]),
+    }));
+
     onSubmit({
       ...form,
       results_achievement: Number(form.results_achievement),
       collaboration_quality: Number(form.collaboration_quality),
+      objective_answers: objectivePayload,
+      department_id: goal?.department_id || '',
     });
   };
 
@@ -50,6 +128,19 @@ const GoalEvaluationModal = ({ goal, notification, saving = false, error = '', o
   }
 
   const employeeName = goal.employee_name || notification?.goal_employee_name;
+  const objectiveSummary = useMemo(() => {
+    if (!objectiveQuestions.length) {
+      return [];
+    }
+    return objectiveQuestions.map((question) => ({
+      id: question.id,
+      title: question.title,
+      type: question.answer_type,
+      max: Number(question.max_score || 10),
+      options: question.answer_options || [],
+      value: objectiveAnswers[question.id],
+    }));
+  }, [objectiveQuestions, objectiveAnswers]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -78,6 +169,40 @@ const GoalEvaluationModal = ({ goal, notification, saving = false, error = '', o
                 ))}
               </ul>
             </div>
+          )}
+
+          {questionsError && <div className="goal-objective-error">{questionsError}</div>}
+
+          {questionsLoading ? (
+            <div className="goal-objective-loading">Подготовка объективных вопросов…</div>
+          ) : (
+            objectiveSummary.length > 0 && (
+              <div className="goal-objective-block">
+                <h3>Объективный блок 360°</h3>
+                <p className="goal-objective-hint">
+                  Ответы на эти вопросы позволяют сравнивать отделы между собой и показывать данные на графиках без дополнительной обработки.
+                </p>
+                <div className="goal-objective-grid">
+                  {objectiveSummary.map((question) => (
+                    <div key={question.id} className="goal-objective-card">
+                      <header>
+                        <strong>{question.title}</strong>
+                        <span className="tag muted">{renderQuestionType(question.type)}</span>
+                      </header>
+                      {renderObjectiveControl({
+                        question,
+                        value: objectiveAnswers[question.id],
+                        onChange: (value) =>
+                          setObjectiveAnswers((prev) => ({
+                            ...prev,
+                            [question.id]: value,
+                          })),
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
           )}
 
           <div className="goal-evaluation-ratings">
@@ -152,3 +277,104 @@ const GoalEvaluationModal = ({ goal, notification, saving = false, error = '', o
 };
 
 export default GoalEvaluationModal;
+
+function renderQuestionType(type) {
+  switch (type) {
+    case 'scale':
+      return 'Шкала';
+    case 'numeric':
+      return 'Числовой ответ';
+    case 'single_choice':
+      return 'Выбор варианта';
+    case 'boolean':
+      return 'Да / Нет';
+    default:
+      return 'Вопрос';
+  }
+}
+
+function renderObjectiveControl({ question, value, onChange }) {
+  if (question.type === 'scale') {
+    const max = Number.isFinite(question.max) ? question.max : 10;
+    const safeValue = Number.isFinite(value) ? value : Math.round(max / 2);
+    return (
+      <div className="goal-objective-control slider">
+        <input
+          type="range"
+          min="0"
+          max={max}
+          step="1"
+          value={safeValue}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <span className="slider-value">{safeValue} из {max}</span>
+      </div>
+    );
+  }
+
+  if (question.type === 'numeric') {
+    return (
+      <div className="goal-objective-control">
+        <input
+          type="number"
+          value={value === '' ? '' : Number(value)}
+          placeholder="Введите точный ответ"
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
+    );
+  }
+
+  if (question.type === 'single_choice') {
+    return (
+      <div className="goal-objective-control choices">
+        {(question.options || []).map((option) => (
+          <label key={option} className="goal-objective-radio">
+            <input
+              type="radio"
+              name={`goal-objective-${question.id}`}
+              value={option}
+              checked={value === option}
+              onChange={(event) => onChange(event.target.value)}
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  if (question.type === 'boolean') {
+    return (
+      <label className="goal-objective-control boolean">
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span>{Boolean(value) ? 'Да' : 'Нет'}</span>
+      </label>
+    );
+  }
+
+  return (
+    <div className="goal-objective-control">
+      <input
+        type="text"
+        value={value || ''}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+}
+
+function formatObjectiveAnswer(question, rawValue) {
+  if (question.answer_type === 'scale' || question.answer_type === 'numeric') {
+    const numeric = Number(rawValue);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  if (question.answer_type === 'boolean') {
+    return Boolean(rawValue);
+  }
+  return rawValue ?? '';
+}

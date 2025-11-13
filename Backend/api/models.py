@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -314,17 +316,19 @@ class GoalParticipant(models.Model):
 class SelfAssessment(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='self_assessments')
-    
-    achieved_results = models.TextField()
-    personal_contribution = models.TextField()
-    skills_acquired = models.TextField()
-    improvements_needed = models.TextField()
-    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])
-    satisfaction_score = models.IntegerField(choices=[(i, i) for i in range(11)])
-    
+
+    achieved_results = models.TextField(blank=True)
+    personal_contribution = models.TextField(blank=True)
+    skills_acquired = models.TextField(blank=True)
+    improvements_needed = models.TextField(blank=True)
+    collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)], default=0)
+    satisfaction_score = models.IntegerField(choices=[(i, i) for i in range(11)], default=0)
+
+    objective_answers = models.JSONField(default=list, blank=True)
+    score_breakdown = models.JSONField(default=dict, blank=True)
     calculated_score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['employee', 'goal']
 
@@ -332,15 +336,17 @@ class Feedback360(models.Model):
     assessor = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='given_feedbacks')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_feedbacks')
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='feedbacks')
-    
+
     results_achievement = models.IntegerField(choices=[(i, i) for i in range(11)])
-    personal_qualities = models.TextField()
+    personal_qualities = models.TextField(blank=True)
     collaboration_quality = models.IntegerField(choices=[(i, i) for i in range(11)])
-    improvements_suggested = models.TextField()
-    
+    improvements_suggested = models.TextField(blank=True)
+
+    objective_answers = models.JSONField(default=list, blank=True)
+    score_breakdown = models.JSONField(default=dict, blank=True)
     calculated_score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['assessor', 'employee', 'goal']
 
@@ -398,8 +404,63 @@ class PotentialAssessment(models.Model):
     
     nine_box_x = models.IntegerField(null=True, blank=True)
     nine_box_y = models.IntegerField(null=True, blank=True)
+    score_breakdown = models.JSONField(default=dict, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+class AssessmentQuestionTemplate(models.Model):
+    class Context(models.TextChoices):
+        SELF = 'self', 'Самооценка'
+        FEEDBACK_360 = 'feedback_360', 'Оценка 360'
+
+    ANSWER_TYPES = (
+        ('scale', 'Шкала'),
+        ('numeric', 'Числовой ответ'),
+        ('single_choice', 'Выбор одного варианта'),
+        ('boolean', 'Да/Нет'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    context = models.CharField(max_length=20, choices=Context.choices)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='assessment_questions',
+        null=True,
+        blank=True,
+    )
+    category = models.CharField(max_length=120, blank=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    answer_type = models.CharField(max_length=20, choices=ANSWER_TYPES)
+    answer_options = models.JSONField(default=list, blank=True)
+    correct_answer = models.JSONField(null=True, blank=True)
+    max_score = models.PositiveIntegerField(default=10)
+    weight = models.PositiveIntegerField(default=1)
+    tolerance = models.FloatField(default=0)
+    order = models.PositiveIntegerField(default=0)
+    complexity = models.CharField(max_length=30, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_assessment_questions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['context', 'department_id', 'order', 'created_at']
+        indexes = [
+            models.Index(fields=['context', 'department_id'], name='assessment_q_context_dept_idx'),
+            models.Index(fields=['context', 'order'], name='assessment_q_context_order_idx'),
+        ]
+
+    def __str__(self) -> str:
+        scope = self.department.name if self.department_id else 'Все отделы'
+        return f"{self.get_context_display()} • {scope} • {self.title[:60]}"
 
 class GoalEvaluationNotification(models.Model):
     recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='evaluation_notifications')
@@ -414,6 +475,35 @@ class GoalEvaluationNotification(models.Model):
     
     def __str__(self):
         return f"Notification for {self.recipient.user.get_full_name()} to evaluate {self.goal.title}"
+
+
+class NineBoxSnapshot(models.Model):
+    class Source(models.TextChoices):
+        SCHEDULED = 'scheduled', 'Плановое обновление'
+        ON_DEMAND = 'on_demand', 'Запрос пользователя'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scope = models.CharField(max_length=64, default='global')
+    generated_at = models.DateTimeField(auto_now_add=True)
+    valid_until = models.DateTimeField()
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.ON_DEMAND)
+    generated_by = models.ForeignKey(
+        Employee,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='nine_box_snapshots',
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    stats = models.JSONField(default=dict, blank=True)
+    ai_recommendations = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-generated_at']
+        indexes = [
+            models.Index(fields=['scope', 'valid_until'], name='ninebox_scope_valid_idx'),
+            models.Index(fields=['generated_at'], name='ninebox_generated_idx'),
+        ]
 
 class FinalReview(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)

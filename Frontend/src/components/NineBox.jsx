@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiGrid, FiRefreshCw, FiSearch } from 'react-icons/fi';
+import { FiClock, FiCpu, FiGrid, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { getNineBoxMatrix } from '../api/services';
 import {
   ResponsiveContainer,
@@ -36,8 +36,79 @@ const BOX_CODES = [
   ['low-high', 'mid-high', 'high-high'],
 ];
 
+const buildEmptyDistribution = () => {
+  const template = {};
+  BOX_CODES.flat().forEach((code) => {
+    template[code] = 0;
+  });
+  return template;
+};
+
+const computeStatsFromMatrix = (matrix) => {
+  const total = matrix.length;
+  const distribution = buildEmptyDistribution();
+  let performanceSum = 0;
+  let potentialSum = 0;
+
+  matrix.forEach((entry) => {
+    const perf = Number(entry.performance_score || 0);
+    const pot = Number(entry.potential_score || 0);
+    performanceSum += perf;
+    potentialSum += pot;
+    const x = Math.max(0, Math.min(2, entry.nine_box_x ?? 0));
+    const y = Math.max(0, Math.min(2, entry.nine_box_y ?? 0));
+    const code = BOX_CODES[y][x];
+    distribution[code] = (distribution[code] || 0) + 1;
+  });
+
+  return {
+    total_employees: total,
+    average_performance: total ? performanceSum / total : 0,
+    average_potential: total ? potentialSum / total : 0,
+    distribution,
+  };
+};
+
+const normalizePayload = (raw) => {
+  if (Array.isArray(raw)) {
+    const stats = computeStatsFromMatrix(raw);
+    return {
+      matrix: raw,
+      stats,
+      aiRecommendations: [],
+      generatedAt: null,
+      validUntil: null,
+    };
+  }
+
+  const matrix = Array.isArray(raw?.matrix)
+    ? raw.matrix
+    : Array.isArray(raw?.payload?.matrix)
+    ? raw.payload.matrix
+    : Array.isArray(raw)
+    ? raw
+    : [];
+
+  const stats = raw?.stats ? raw.stats : computeStatsFromMatrix(matrix);
+  const recommendations = raw?.ai_recommendations || raw?.recommendations || [];
+
+  return {
+    matrix,
+    stats,
+    aiRecommendations: recommendations,
+    generatedAt: raw?.generated_at || raw?.generatedAt || null,
+    validUntil: raw?.valid_until || raw?.validUntil || null,
+  };
+};
+
 function NineBox() {
-  const [matrixData, setMatrixData] = useState([]);
+  const [dataset, setDataset] = useState({
+    matrix: [],
+    stats: {},
+    aiRecommendations: [],
+    generatedAt: null,
+    validUntil: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -48,11 +119,19 @@ function NineBox() {
 
     try {
       const response = await getNineBoxMatrix();
-      setMatrixData(response.data || []);
+      const raw = response?.data ?? [];
+      const normalized = normalizePayload(raw);
+      setDataset(normalized);
     } catch (err) {
       console.error('Не удалось загрузить матрицу 9-Box', err);
       setError('Не удалось загрузить матрицу. Проверьте права доступа или попробуйте позже.');
-      setMatrixData([]);
+      setDataset({
+        matrix: [],
+        stats: {},
+        aiRecommendations: [],
+        generatedAt: null,
+        validUntil: null,
+      });
     } finally {
       setLoading(false);
     }
@@ -62,15 +141,17 @@ function NineBox() {
     loadMatrix();
   }, []);
 
+  const normalizedMatrix = dataset.matrix || [];
+
   const filteredData = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) {
-      return matrixData;
+      return normalizedMatrix;
     }
-    return matrixData.filter((entry) =>
+    return normalizedMatrix.filter((entry) =>
       (entry.employee_name || '').toLowerCase().includes(query)
     );
-  }, [matrixData, search]);
+  }, [normalizedMatrix, search]);
 
   const grid = useMemo(() => {
     const result = Array.from({ length: 3 }, () =>
@@ -82,7 +163,6 @@ function NineBox() {
       const y = Math.max(0, Math.min(2, entry.nine_box_y ?? 0));
       result[y][x].push(entry);
     });
-
     return result;
   }, [filteredData]);
 
@@ -112,15 +192,33 @@ function NineBox() {
     );
     const counts = Object.fromEntries(base.map((item) => [item.code, { ...item }]));
 
-    filteredData.forEach((entry) => {
-      const x = Math.max(0, Math.min(2, entry.nine_box_x ?? 0));
-      const y = Math.max(0, Math.min(2, entry.nine_box_y ?? 0));
-      const code = BOX_CODES[y][x];
-      counts[code].count += 1;
-    });
+    if (dataset.stats?.distribution) {
+      Object.entries(dataset.stats.distribution).forEach(([code, value]) => {
+        if (counts[code]) {
+          counts[code].count = value;
+        }
+      });
+    } else {
+      filteredData.forEach((entry) => {
+        const x = Math.max(0, Math.min(2, entry.nine_box_x ?? 0));
+        const y = Math.max(0, Math.min(2, entry.nine_box_y ?? 0));
+        const code = BOX_CODES[y][x];
+        counts[code].count += 1;
+      });
+    }
 
     return base.map((item) => counts[item.code]);
-  }, [filteredData]);
+  }, [filteredData, dataset.stats]);
+
+  const averagePerformance = (dataset.stats?.average_performance ?? 0).toFixed(1);
+  const averagePotential = (dataset.stats?.average_potential ?? 0).toFixed(1);
+  const aiRecommendations = dataset.aiRecommendations || [];
+  const generatedAtLabel = dataset.generatedAt
+    ? new Date(dataset.generatedAt).toLocaleString('ru-RU')
+    : null;
+  const validUntilLabel = dataset.validUntil
+    ? new Date(dataset.validUntil).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <div className="page nine-box-page">
@@ -133,6 +231,12 @@ function NineBox() {
           <p className="page-subtitle">
             Визуализируйте потенциал и результативность сотрудников, чтобы планировать развитие и удержание
           </p>
+          {(generatedAtLabel || validUntilLabel) && (
+            <p className="page-meta">
+              <FiClock size={14} /> Обновлено {generatedAtLabel || 'только что'}
+              {validUntilLabel ? ` • Актуально до ${validUntilLabel}` : ''}
+            </p>
+          )}
         </div>
         <div className="page-actions">
           <div className="input-with-icon">
@@ -169,9 +273,17 @@ function NineBox() {
           <span className="label">Зона внимания</span>
           <span className="value warning">{summary.attention}</span>
         </article>
+        <article className="summary-card">
+          <span className="label">Средняя результативность</span>
+          <span className="value">{averagePerformance}</span>
+        </article>
+        <article className="summary-card">
+          <span className="label">Средний потенциал</span>
+          <span className="value">{averagePotential}</span>
+        </article>
       </section>
 
-      {!loading && !error && matrixData.length === 0 && (
+      {!loading && !error && normalizedMatrix.length === 0 && (
         <div className="page-banner info">
           <span>
             Пока нет оценок потенциала. Создайте оценку в разделе «Отчеты» или импортируйте результаты, чтобы заполнить
@@ -267,6 +379,39 @@ function NineBox() {
           </div>
         )}
       </section>
+
+      {aiRecommendations.length > 0 && (
+        <section className="panel ai-panel">
+          <header className="panel-header">
+            <div>
+              <p className="panel-overline">Персональные подсказки</p>
+              <h2>
+                <FiCpu size={18} /> ИИ-рекомендации
+              </h2>
+            </div>
+          </header>
+          <div className="ai-grid">
+            {aiRecommendations.slice(0, 9).map((item) => (
+              <article key={`${item.employee_id}-${item.title}`} className={`ai-card priority-${item.priority || 'medium'}`}>
+                <header>
+                  <div>
+                    <strong>{item.employee_name || 'Сотрудник без имени'}</strong>
+                    {item.department && <span className="tag muted">{item.department}</span>}
+                  </div>
+                  <span className={`priority-badge ${item.priority || 'medium'}`}>{item.priority === 'high' ? 'Высокий приоритет' : item.priority === 'low' ? 'Низкий приоритет' : 'Средний приоритет'}</span>
+                </header>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+                <ul>
+                  {(item.actions || []).map((action) => (
+                    <li key={action}>• {action}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="panel legend-panel">
         <header className="panel-header">

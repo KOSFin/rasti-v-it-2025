@@ -16,6 +16,7 @@ from .models import (
     Team,
     Feedback360,
     FinalReview,
+    AssessmentQuestionTemplate,
 )
 
 
@@ -413,6 +414,7 @@ class GoalParticipantSerializer(serializers.ModelSerializer):
 class GoalSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
     department_name = serializers.SerializerMethodField()
+    department_id = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.user.get_full_name', read_only=True, allow_null=True)
     tasks = TaskSerializer(many=True, read_only=True)
     tasks_completed = serializers.SerializerMethodField()
@@ -482,6 +484,16 @@ class GoalSerializer(serializers.ModelSerializer):
         }
         return ', '.join(sorted(departments)) if departments else ''
 
+    def get_department_id(self, obj):
+        if obj.employee and obj.employee.department_id:
+            return obj.employee.department_id
+        department_ids = {
+            participant.employee.department_id
+            for participant in obj.goal_participants.select_related('employee__department')
+            if participant.employee.department_id
+        }
+        return next(iter(department_ids), None)
+
 
 
 class SelfAssessmentSerializer(serializers.ModelSerializer):
@@ -495,6 +507,28 @@ class SelfAssessmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {
             'employee': {'required': False},
+            'achieved_results': {'required': False, 'allow_blank': True},
+            'personal_contribution': {'required': False, 'allow_blank': True},
+            'skills_acquired': {'required': False, 'allow_blank': True},
+            'improvements_needed': {'required': False, 'allow_blank': True},
+            'collaboration_quality': {'required': False},
+            'satisfaction_score': {'required': False},
+        }
+
+
+class AssessmentQuestionTemplateSerializer(serializers.ModelSerializer):
+    context_display = serializers.CharField(source='get_context_display', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.user.get_full_name', read_only=True)
+
+    class Meta:
+        model = AssessmentQuestionTemplate
+        fields = '__all__'
+        extra_kwargs = {
+            'created_by': {'required': False, 'allow_null': True},
+            'department': {'required': False, 'allow_null': True},
+            'answer_options': {'required': False},
+            'correct_answer': {'required': False, 'allow_null': True},
         }
 
 class Feedback360Serializer(serializers.ModelSerializer):
@@ -509,6 +543,10 @@ class Feedback360Serializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {
             'assessor': {'required': False},
+            'personal_qualities': {'required': False, 'allow_blank': True},
+            'improvements_suggested': {'required': False, 'allow_blank': True},
+            'results_achievement': {'required': False},
+            'collaboration_quality': {'required': False},
         }
 
 class ManagerReviewSerializer(serializers.ModelSerializer):

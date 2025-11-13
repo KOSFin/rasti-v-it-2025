@@ -226,6 +226,9 @@ export const getPotentialAssessments = (params) =>
 export const getNineBoxMatrix = () => 
   api.get('/api/potential-assessments/nine_box_matrix/');
 
+export const getNineBoxRecommendations = () =>
+  api.get('/api/potential-assessments/ai_recommendations/');
+
 export const createPotentialAssessment = (data) => 
   api.post('/api/potential-assessments/', data);
 
@@ -297,3 +300,18 @@ export const getGoalNotificationsUnreadCount = () =>
 
 export const markGoalNotificationRead = (id) =>
   api.post(`/api/goal-notifications/${id}/mark_read/`);
+
+export const listAssessmentQuestions = (params) =>
+  api.get('/api/assessment-questions/', params ? { params } : undefined);
+
+export const getAssessmentQuestionBank = (params) =>
+  api.get('/api/assessment-questions/active/', params ? { params } : undefined);
+
+export const createAssessmentQuestion = (data) =>
+  api.post('/api/assessment-questions/', data);
+
+export const updateAssessmentQuestion = (id, data) =>
+  api.patch(`/api/assessment-questions/${id}/`, data);
+
+export const deleteAssessmentQuestion = (id) =>
+  api.delete(`/api/assessment-questions/${id}/`);

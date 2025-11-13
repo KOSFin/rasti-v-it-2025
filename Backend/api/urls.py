@@ -17,6 +17,7 @@ router.register(r'potential-assessments', views.PotentialAssessmentViewSet, base
 router.register(r'final-reviews', views.FinalReviewViewSet, basename='final-review')
 router.register(r'goal-notifications', views.GoalEvaluationNotificationViewSet, basename='goal-notification')
 router.register(r'role-assignments', views.EmployeeRoleAssignmentViewSet, basename='role-assignment')
+router.register(r'assessment-questions', views.AssessmentQuestionTemplateViewSet, basename='assessment-question')
 
 urlpatterns = [
     path('api/', include(router.urls)),

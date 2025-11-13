@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, filters
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
@@ -6,10 +6,13 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Avg, Count
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import *
 from .serializers import *
+from .services.assessment_scoring import evaluate_answers, get_effective_question_bank
+from .services.nine_box import build_matrix_payload, generate_snapshot, get_active_snapshot
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):
@@ -682,7 +685,35 @@ class TaskViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
-class SelfAssessmentViewSet(viewsets.ModelViewSet):
+class ObjectiveAssessmentMixin:
+    def _evaluate_objective_answers(self, *, context: str, employee: Employee, goal: Goal | None, payload: dict) -> dict:
+        objective_answers = payload.get('objective_answers') or []
+        department_raw = payload.get('department_id', None)
+        if isinstance(department_raw, str) and department_raw.isdigit():
+            department_id = int(department_raw)
+        elif isinstance(department_raw, int):
+            department_id = department_raw
+        else:
+            department_id = getattr(employee, 'department_id', None)
+        if not objective_answers:
+            question_bank = get_effective_question_bank(context, department_id)
+            if not question_bank:
+                return {'answers': [], 'score': 0, 'max_score': 0, 'accuracy': 0, 'categories': []}
+        result = evaluate_answers(
+            context=context,
+            answers=objective_answers,
+            department_id=department_id,
+        )
+        return {
+            'answers': result.answers_json(),
+            'score': result.total_score,
+            'max_score': result.total_max_score,
+            'accuracy': result.accuracy,
+            'categories': result.categories,
+        }
+
+
+class SelfAssessmentViewSet(ObjectiveAssessmentMixin, viewsets.ModelViewSet):
     serializer_class = SelfAssessmentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -702,7 +733,7 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         satisfaction_score = min(max(satisfaction_value, 0) // 5, 2)
         return collaboration_score + satisfaction_score
 
-    def _upsert_self_assessment(self, *, employee: Employee, validated_data: dict) -> tuple[SelfAssessment, bool]:
+    def _upsert_self_assessment(self, *, employee: Employee, validated_data: dict, raw_payload: dict) -> tuple[SelfAssessment, bool]:
         goal = validated_data['goal']
         fields = {
             'achieved_results': validated_data['achieved_results'],
@@ -716,7 +747,22 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
             fields['collaboration_quality'],
             fields['satisfaction_score'],
         )
-        fields['calculated_score'] = total_score
+        scoring_payload = self._evaluate_objective_answers(
+            context='self',
+            employee=employee,
+            goal=goal,
+            payload=raw_payload,
+        )
+        objective_score = scoring_payload.get('score', 0)
+        max_score = scoring_payload.get('max_score', 0)
+        combined_total = total_score * 10 + objective_score
+        fields['objective_answers'] = scoring_payload.get('answers', [])
+        fields['score_breakdown'] = {
+            'self_rating': total_score,
+            'objective': scoring_payload,
+            'max_score': max_score + 30,
+        }
+        fields['calculated_score'] = combined_total
 
         with transaction.atomic():
             instance = (
@@ -789,7 +835,11 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         if goal and not goal.participants.filter(pk=employee.pk).exists():
             raise ValidationError({'detail': 'Вы не участвуете в этой цели.'})
 
-        instance, created = self._upsert_self_assessment(employee=employee, validated_data=serializer.validated_data)
+        instance, created = self._upsert_self_assessment(
+            employee=employee,
+            validated_data=serializer.validated_data,
+            raw_payload=request.data,
+        )
         output = self.get_serializer(instance)
         headers = self.get_success_headers(output.data)
         return Response(
@@ -805,10 +855,26 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         collaboration_raw = data.get('collaboration_quality', instance.collaboration_quality)
         satisfaction_raw = data.get('satisfaction_score', instance.satisfaction_score)
 
+        scoring_payload = self._evaluate_objective_answers(
+            context='self',
+            employee=instance.employee,
+            goal=instance.goal,
+            payload=self.request.data,
+        )
         total_score = self._calculate_total_score(collaboration_raw, satisfaction_raw)
-        serializer.save(calculated_score=total_score)
+        objective_score = scoring_payload.get('score', 0)
+        combined_total = total_score * 10 + objective_score
+        serializer.save(
+            calculated_score=combined_total,
+            objective_answers=scoring_payload.get('answers', []),
+            score_breakdown={
+                'self_rating': total_score,
+                'objective': scoring_payload,
+                'max_score': scoring_payload.get('max_score', 0) + 30,
+            },
+        )
 
-class Feedback360ViewSet(viewsets.ModelViewSet):
+class Feedback360ViewSet(ObjectiveAssessmentMixin, viewsets.ModelViewSet):
     serializer_class = Feedback360Serializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -851,14 +917,32 @@ class Feedback360ViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         employee = Employee.objects.get(user=user)
-        
+
         data = serializer.validated_data
         results_score = min(data['results_achievement'] // 4, 3)  # 0-10 -> 0-3
         collaboration_score = min(data['collaboration_quality'] // 4, 3)  # 0-10 -> 0-3
-        
-        total_score = results_score + collaboration_score
-        serializer.save(assessor=employee, calculated_score=total_score)
-        
+
+        scoring_payload = self._evaluate_objective_answers(
+            context='feedback_360',
+            employee=employee,
+            goal=data['goal'],
+            payload=self.request.data,
+        )
+        objective_score = scoring_payload.get('score', 0)
+        total_score = results_score * 10 + collaboration_score * 10 + objective_score
+
+        serializer.save(
+            assessor=employee,
+            calculated_score=total_score,
+            objective_answers=scoring_payload.get('answers', []),
+            score_breakdown={
+                'results_rating': results_score,
+                'collaboration_rating': collaboration_score,
+                'objective': scoring_payload,
+                'max_score': scoring_payload.get('max_score', 0) + 60,
+            },
+        )
+
         goal = data['goal']
         try:
             notification = GoalEvaluationNotification.objects.get(
@@ -971,36 +1055,101 @@ class PotentialAssessmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
 
+        scope = 'global'
+        if employee and employee.department_id:
+            scope = f"department:{employee.department_id}"
+
+        cached = get_active_snapshot(scope=scope, freshness_minutes=30)
+        if cached:
+            dataset = {
+                'matrix': cached.payload.get('matrix', []),
+                'stats': cached.stats,
+                'ai_recommendations': cached.ai_recommendations,
+                'generated_at': cached.generated_at,
+                'valid_until': cached.valid_until,
+                'source': cached.source,
+            }
+            return Response(dataset)
+
         if user.is_superuser:
-            assessments = PotentialAssessment.objects.all().select_related('employee', 'employee__user')
+            employees = Employee.objects.select_related('user', 'department').all()
         elif not employee:
-            return Response([], status=status.HTTP_200_OK)
+            return Response({'matrix': [], 'stats': {}, 'ai_recommendations': []}, status=status.HTTP_200_OK)
         elif employee.has_global_visibility():
-            assessments = PotentialAssessment.objects.all().select_related('employee', 'employee__user')
+            employees = Employee.objects.select_related('user', 'department').all()
         elif employee.has_leadership_scope:
             managed_ids = employee.managed_employee_ids()
-            assessments = PotentialAssessment.objects.filter(
-                Q(manager=employee) | Q(employee_id__in=managed_ids)
-            ).select_related('employee', 'employee__user')
+            employees = Employee.objects.filter(
+                Q(id__in=managed_ids) | Q(id=employee.id)
+            ).select_related('user', 'department')
         else:
             return Response(
                 {'error': 'Доступ к матрице открыт только руководителям и пользователям с расширенными правами.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        matrix_data = []
-        for assessment in assessments:
-            matrix_data.append({
-                'employee_id': assessment.employee.id,
-                'employee_name': assessment.employee.user.get_full_name(),
-                'position': assessment.employee.position_title or '',
-                'performance_score': assessment.performance_score,
-                'potential_score': assessment.potential_score,
-                'nine_box_x': assessment.nine_box_x,
-                'nine_box_y': assessment.nine_box_y,
-            })
+        _, dataset = generate_snapshot(
+            employees=employees,
+            scope=scope,
+            ttl_minutes=60,
+            source=NineBoxSnapshot.Source.ON_DEMAND,
+            generated_by=employee if employee else None,
+        )
+        return Response(dataset)
 
-        return Response(matrix_data)
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def ai_recommendations(self, request):
+        user = request.user
+        employee = Employee.objects.filter(user=user).select_related('department').first()
+
+        if user.is_superuser:
+            employees = Employee.objects.select_related('user', 'department').all()[:50]
+        elif not employee or not employee.has_leadership_scope:
+            return Response({'detail': 'Недостаточно прав для получения рекомендаций.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            managed_ids = employee.managed_employee_ids()
+            employees = Employee.objects.filter(id__in=managed_ids).select_related('user', 'department')[:50]
+
+        dataset = build_matrix_payload(employees)
+        return Response({
+            'recommendations': dataset['ai_recommendations'],
+            'generated_at': timezone.now(),
+        })
+
+
+class AssessmentQuestionTemplateViewSet(viewsets.ModelViewSet):
+    queryset = AssessmentQuestionTemplate.objects.select_related('department', 'created_by__user').all()
+    serializer_class = AssessmentQuestionTemplateSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+    filterset_fields = ['context', 'department', 'is_active', 'category']
+    ordering_fields = ['order', 'created_at', 'updated_at']
+    search_fields = ['title', 'description', 'category']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [permission() for permission in self.permission_classes]
+        user = self.request.user
+        if user.is_superuser:
+            return [permission() for permission in self.permission_classes]
+        employee = Employee.objects.filter(user=user).first()
+        if employee and employee.has_global_visibility():
+            return [permission() for permission in self.permission_classes]
+        return [IsAdminUser()]
+
+    def perform_create(self, serializer):
+        employee = Employee.objects.filter(user=self.request.user).first()
+        serializer.save(created_by=employee)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def active(self, request):
+        context = request.query_params.get('context')
+        department_id = request.query_params.get('department')
+        if not context:
+            return Response({'detail': 'context is required'}, status=status.HTTP_400_BAD_REQUEST)
+        question_bank = get_effective_question_bank(context, department_id)
+        serializer = self.get_serializer(question_bank, many=True)
+        return Response(serializer.data)
     
     def perform_create(self, serializer):
         user = self.request.user
