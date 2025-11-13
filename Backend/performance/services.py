@@ -5,7 +5,7 @@ from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING, Union
 
 from django.db import transaction
 from django.db.models import Avg, Q
@@ -42,6 +42,202 @@ SKILL_REVIEW_MISS_GRACE_DAYS = 14
 
 if TYPE_CHECKING:
     from api.models import Employee
+
+
+def _department_id_for_employer(employer: Employer) -> Optional[int]:
+    employee_profile = _employee_for_employer(employer)
+    if employee_profile and employee_profile.department_id:
+        return employee_profile.department_id
+    return None
+
+
+def _skill_question_contexts(review_type: str) -> List[str]:
+    if review_type == "self":
+        return [SkillQuestion.Context.SELF, SkillQuestion.Context.BOTH]
+    if review_type == "peer":
+        return [SkillQuestion.Context.PEER, SkillQuestion.Context.BOTH]
+    return [SkillQuestion.Context.BOTH]
+
+
+def _skill_questions_for_review(employer: Employer, *, review_type: str) -> List[SkillQuestion]:
+    department_id = _department_id_for_employer(employer)
+    contexts = _skill_question_contexts(review_type)
+
+    queryset = SkillQuestion.objects.filter(is_active=True, context__in=contexts).select_related("category")
+    if department_id:
+        queryset = queryset.filter(Q(departments__isnull=True) | Q(departments=department_id))
+    else:
+        queryset = queryset.filter(departments__isnull=True)
+
+    return list(
+        queryset.order_by("category__skill_type", "category__name", "created_at", "id").distinct()
+    )
+
+
+def _parse_number(value: Union[str, int, float, None]) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            cleaned = value.replace(",", ".").strip()
+            if cleaned:
+                return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_boolean_value(value: Union[str, int, float, bool, None]) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y", "да"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n", "нет"}:
+            return False
+    return None
+
+
+def _clamp_grade(value: float) -> int:
+    return int(max(0, min(10, round(value))))
+
+
+def _evaluate_scale_answer(question: SkillQuestion, provided_grade: Optional[int], raw_answer: Union[int, float, str, None]):
+    scale_min = question.scale_min or 0
+    scale_max = question.scale_max or 10
+    if scale_max <= scale_min:
+        scale_max = scale_min + 10
+
+    numeric_value = _parse_number(raw_answer)
+    if numeric_value is None and provided_grade is not None:
+        numeric_value = scale_min + (scale_max - scale_min) * (float(provided_grade) / 10.0)
+
+    if numeric_value is None:
+        raise ServiceError("Ответ должен быть числом", code="invalid_answer")
+
+    clamped = max(scale_min, min(scale_max, numeric_value))
+    span = scale_max - scale_min
+    ratio = 0.0 if span == 0 else (clamped - scale_min) / span
+    grade = _clamp_grade(ratio * 10.0)
+    is_correct = ratio >= 0.7
+    payload = {
+        "raw": clamped,
+        "ratio": round(ratio, 4),
+        "scale_min": scale_min,
+        "scale_max": scale_max,
+    }
+    return grade, payload, is_correct
+
+
+def _evaluate_numeric_answer(question: SkillQuestion, provided_grade: Optional[int], raw_answer: Union[int, float, str, None]):
+    numeric_value = _parse_number(raw_answer)
+    if numeric_value is None:
+        numeric_value = _parse_number(provided_grade)
+
+    if numeric_value is None:
+        raise ServiceError("Нужно указать числовой ответ", code="invalid_answer")
+
+    expected = _parse_number(question.correct_answer)
+    tolerance = float(question.tolerance or 0)
+    is_correct = None
+    delta = None
+
+    if expected is not None:
+        delta = abs(numeric_value - expected)
+        is_correct = delta <= tolerance
+        grade = 10 if is_correct else 0
+    else:
+        grade = _clamp_grade(float(provided_grade or 0))
+
+    payload = {
+        "raw": numeric_value,
+        "expected": expected,
+        "tolerance": tolerance,
+        "delta": delta,
+    }
+
+    return grade, payload, is_correct
+
+
+def _evaluate_single_choice_answer(question: SkillQuestion, provided_grade: Optional[int], raw_answer: Union[str, Dict, None]):
+    if isinstance(raw_answer, dict) and "value" in raw_answer:
+        answer_value = raw_answer.get("value")
+    else:
+        answer_value = raw_answer
+
+    if answer_value is None:
+        answer_value = provided_grade
+
+    if answer_value is None:
+        raise ServiceError("Не выбран вариант ответа", code="invalid_answer")
+
+    options = question.answer_options or []
+    if options and answer_value not in options:
+        raise ServiceError("Выбран недопустимый вариант ответа", code="invalid_answer")
+
+    expected = question.correct_answer
+    if isinstance(expected, list):
+        is_correct = answer_value in expected
+    elif expected is None:
+        is_correct = None
+    else:
+        is_correct = answer_value == expected
+
+    grade = 10 if is_correct else 0
+    if is_correct is None:
+        grade = _clamp_grade(float(provided_grade or 0))
+
+    payload = {
+        "raw": answer_value,
+        "options": options,
+        "expected": expected,
+    }
+
+    return grade, payload, is_correct
+
+
+def _evaluate_boolean_answer(question: SkillQuestion, provided_grade: Optional[int], raw_answer: Union[bool, str, int, None]):
+    bool_value = _parse_boolean_value(raw_answer)
+    if bool_value is None:
+        bool_value = _parse_boolean_value(provided_grade)
+
+    if bool_value is None:
+        raise ServiceError("Ответ должен быть Да или Нет", code="invalid_answer")
+
+    expected = _parse_boolean_value(question.correct_answer)
+    if expected is not None:
+        is_correct = bool_value is expected
+        grade = 10 if is_correct else 0
+    else:
+        is_correct = None
+        grade = 10 if bool_value else 0
+
+    payload = {
+        "raw": bool_value,
+        "expected": expected,
+    }
+
+    return grade, payload, is_correct
+
+
+def _evaluate_answer(question: SkillQuestion, provided_grade: Optional[int], raw_answer: Union[int, float, str, bool, Dict, None]):
+    if question.answer_type == SkillQuestion.AnswerType.SCALE:
+        return _evaluate_scale_answer(question, provided_grade, raw_answer)
+    if question.answer_type == SkillQuestion.AnswerType.NUMERIC:
+        return _evaluate_numeric_answer(question, provided_grade, raw_answer)
+    if question.answer_type == SkillQuestion.AnswerType.SINGLE_CHOICE:
+        return _evaluate_single_choice_answer(question, provided_grade, raw_answer)
+    if question.answer_type == SkillQuestion.AnswerType.BOOLEAN:
+        return _evaluate_boolean_answer(question, provided_grade, raw_answer)
+
+    grade = _clamp_grade(float(provided_grade or 0))
+    payload = {"raw": raw_answer}
+    return grade, payload, None
 
 
 class ServiceError(Exception):
@@ -375,11 +571,7 @@ def _create_question_placeholders(
 
 def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
 
-    questions = list(
-        SkillQuestion.objects.filter(is_active=True)
-        .select_related("category")
-        .order_by("category__skill_type", "category__name", "id")
-    )
+    questions = _skill_questions_for_review(employer, review_type="self")
 
     zero_period = _ensure_zero_period()
 
@@ -457,9 +649,6 @@ def ensure_initial_self_review(employer: Employer) -> Optional[ReviewLog]:
 def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
 
     result = ReviewCycleResult()
-    questions = list(SkillQuestion.objects.filter(is_active=True).select_related("category"))
-    if not questions:
-        return result.as_dict()
 
     ensure_default_skill_periods()
     periods = list(ReviewPeriod.objects.filter(is_active=True).order_by("month_period"))
@@ -477,12 +666,15 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
         if days_since_activation < 0:
             continue
 
-        if days_since_activation == 0:
+        self_questions = _skill_questions_for_review(employer, review_type="self")
+        peer_questions = _skill_questions_for_review(employer, review_type="peer")
+
+        if days_since_activation == 0 and self_questions:
             created_answers, _ = _create_question_placeholders(
                 employer=employer,
                 respondent=employer,
                 period=zero_period,
-                questions=questions,
+                questions=self_questions,
             )
             if created_answers:
                 result.created_self_tests += 1
@@ -507,6 +699,9 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                 continue
             due_at = add_months(base_date, period.month_period)
 
+            if not peer_questions:
+                continue
+
             for respondent in active_employees:
                 if respondent.id == employer.id:
                     continue
@@ -514,7 +709,7 @@ def generate_skill_review_cycles(current_date: date) -> Dict[str, int]:
                     employer=employer,
                     respondent=respondent,
                     period=period,
-                    questions=questions,
+                    questions=peer_questions,
                 )
                 if created_answers:
                     result.created_peer_reviews += 1
@@ -541,7 +736,7 @@ def _validate_log_token(token: str) -> ReviewLog:
     except ReviewLog.DoesNotExist as exc:
         raise ServiceError("Invalid or unknown token", code="invalid_token", status=404) from exc
 
-    if review_log.status == ReviewLog.STATUS_COMPLETED:
+    if review_log.status in {ReviewLog.STATUS_COMPLETED, ReviewLog.STATUS_AWAITING_FEEDBACK}:
         raise ServiceError("Review already submitted", code="already_submitted", status=409)
 
     if timezone.now() >= review_log.expires_at:
@@ -557,21 +752,56 @@ def fetch_skill_form(token: str) -> Dict:
     employer = review_log.employer
     respondent = review_log.respondent
     period = review_log.period
+    metadata = review_log.metadata or {}
+    review_type = metadata.get("review_type") or ("self" if employer.id == respondent.id else "peer")
 
-    questions = list(
-        SkillQuestion.objects.filter(is_active=True)
-        .select_related("category")
-        .order_by("category__skill_type", "category__name", "id")
-    )
-
-    existing_answers = {
-        answer.question_id: answer.grade
-        for answer in ReviewAnswer.objects.filter(
+    answers_qs = (
+        ReviewAnswer.objects.filter(
             employer=employer,
             respondent=respondent,
             period=period,
         )
-    }
+        .select_related("question", "question__category")
+        .order_by(
+            "question__category__skill_type",
+            "question__category__name",
+            "question__created_at",
+            "question_id",
+        )
+    )
+
+    answers = list(answers_qs)
+
+    if not answers:
+        questions = _skill_questions_for_review(employer, review_type=review_type)
+        if questions:
+            _create_question_placeholders(
+                employer=employer,
+                respondent=respondent,
+                period=period,
+                questions=questions,
+            )
+            answers = list(
+                ReviewAnswer.objects.filter(
+                    employer=employer,
+                    respondent=respondent,
+                    period=period,
+                )
+                .select_related("question", "question__category")
+                .order_by(
+                    "question__category__skill_type",
+                    "question__category__name",
+                    "question__created_at",
+                    "question_id",
+                )
+            )
+
+    existing_answers: Dict[int, ReviewAnswer] = {answer.question_id: answer for answer in answers}
+
+    if existing_answers:
+        questions = [answer.question for answer in answers]
+    else:
+        questions = _skill_questions_for_review(employer, review_type=review_type)
 
     hard_payload: List[Dict] = []
     soft_payload: List[Dict] = []
@@ -579,10 +809,21 @@ def fetch_skill_form(token: str) -> Dict:
     questions_by_category: Dict[int, Dict] = {}
 
     for question in questions:
+            answer_value = {}
+            if answer_obj and answer_obj.answer_value:
+                answer_value = answer_obj.answer_value
+        answer_value = answer_obj.answer_value if answer_obj else {}
         question_entry = {
             "id": question.id,
             "question": question.question_text,
-            "grade": existing_answers.get(question.id, 0),
+            "grade": answer_obj.grade if answer_obj else 0,
+            "answer_type": question.answer_type,
+            "scale_min": question.scale_min,
+            "scale_max": question.scale_max,
+            "answer_options": question.answer_options,
+            "difficulty": question.difficulty,
+            "weight": question.weight,
+            "answer_value": answer_value,
         }
         container = hard_payload if question.category.skill_type == SkillCategory.HARD else soft_payload
 
@@ -616,6 +857,7 @@ def fetch_skill_form(token: str) -> Dict:
             "soft_skills": soft_payload,
         },
         "link_valid_until": review_log.expires_at.isoformat(),
+        "review_context": review_type,
     }
     return response
 
@@ -626,6 +868,8 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
     employer = review_log.employer
     respondent = review_log.respondent
     period = review_log.period
+    metadata = review_log.metadata or {}
+    review_type = metadata.get("review_type") or ("self" if employer.id == respondent.id else "peer")
 
     if not isinstance(answers, list) or not answers:
         raise ServiceError("Answers payload is empty", code="empty_answers")
@@ -633,7 +877,10 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
     updated = 0
     for row in answers:
         question_id = row.get("id_question") or row.get("question")
-        grade = row.get("grade")
+        provided_grade = row.get("grade")
+        raw_answer = row.get("answer")
+        if raw_answer is None and "value" in row:
+            raw_answer = row.get("value")
         if question_id is None:
             raise ServiceError("Question id is required", code="missing_question")
         try:
@@ -641,8 +888,18 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
         except SkillQuestion.DoesNotExist as exc:
             raise ServiceError(f"Question {question_id} not found", code="unknown_question") from exc
 
-        if not isinstance(grade, int) or grade not in range(0, 11):
-            raise ServiceError("Grade must be an integer between 0 and 10", code="invalid_grade")
+        if review_type == "self" and question.context == SkillQuestion.Context.PEER:
+            raise ServiceError("Вопрос относится к другому типу оценки", code="invalid_question")
+        if review_type == "peer" and question.context == SkillQuestion.Context.SELF:
+            raise ServiceError("Вопрос относится к другому типу оценки", code="invalid_question")
+
+        if provided_grade is not None and not isinstance(provided_grade, int):
+            try:
+                provided_grade = int(provided_grade)
+            except (TypeError, ValueError):
+                raise ServiceError("Grade must be an integer between 0 and 10", code="invalid_grade")
+
+        grade_value, answer_payload, is_correct = _evaluate_answer(question, provided_grade, raw_answer)
 
         answer, _ = ReviewAnswer.objects.get_or_create(
             employer=employer,
@@ -654,9 +911,11 @@ def submit_skill_answers(token: str, answers: List[Dict], *, partial: bool = Fal
                 "grade": 0,
             },
         )
-        answer.grade = grade
+        answer.grade = grade_value
         answer.question_type = question.category.skill_type
-        answer.save(update_fields=["grade", "question_type", "updated_at"])
+        answer.answer_value = answer_payload or {}
+        answer.is_correct = is_correct
+        answer.save(update_fields=["grade", "question_type", "answer_value", "is_correct", "updated_at"])
         updated += 1
 
     now_iso = timezone.now().isoformat()
@@ -769,8 +1028,8 @@ def review_analytics(
 
     answers_by_period_category: Dict[Tuple[str, str, int], Dict[str, Dict[str, float]]] = defaultdict(
         lambda: {
-            "self": {"sum": 0.0, "weight": 0.0},
-            "peer": {"sum": 0.0, "weight": 0.0},
+            "self": {"sum": 0.0, "weight": 0.0, "correct": 0.0, "total": 0.0},
+            "peer": {"sum": 0.0, "weight": 0.0, "correct": 0.0, "total": 0.0},
         }
     )
 
@@ -784,12 +1043,18 @@ def review_analytics(
             bucket_self = bucket["self"]
             bucket_self["sum"] += answer.grade * weight
             bucket_self["weight"] += weight
+            bucket_self["total"] += 1
+            if answer.is_correct:
+                bucket_self["correct"] += 1
             overall_self_sum += answer.grade * weight
             overall_self_weight += weight
         else:
             bucket_peer = bucket["peer"]
             bucket_peer["sum"] += answer.grade * weight
             bucket_peer["weight"] += weight
+            bucket_peer["total"] += 1
+            if answer.is_correct:
+                bucket_peer["correct"] += 1
             overall_peer_sum += answer.grade * weight
             overall_peer_weight += weight
 
@@ -806,6 +1071,10 @@ def review_analytics(
         period_obj = periods_map[period_id]
         self_avg = _weighted_average(values["self"]["sum"], values["self"]["weight"])
         peer_avg = _weighted_average(values["peer"]["sum"], values["peer"]["weight"])
+        self_correct = int(values["self"].get("correct", 0))
+        self_total = int(values["self"].get("total", 0))
+        peer_correct = int(values["peer"].get("correct", 0))
+        peer_total = int(values["peer"].get("total", 0))
 
         period_entry = {
             "period": _period_label(period_obj),
@@ -815,6 +1084,10 @@ def review_analytics(
             "peer": peer_avg,
             "trend_self": None,
             "trend_peer": None,
+            "self_correct": self_correct,
+            "self_total": self_total,
+            "peer_correct": peer_correct,
+            "peer_total": peer_total,
         }
 
         category_key = (skill_type_key, category_name)
@@ -827,6 +1100,8 @@ def review_analytics(
         periods_data = payload["periods"]
         periods_data.sort(key=lambda item: item["period_order"])
         prev_self = prev_peer = None
+        total_self_correct = total_self_answers = 0
+        total_peer_correct = total_peer_answers = 0
         for entry in periods_data:
             self_grade = entry["self"]
             peer_grade = entry["peer"]
@@ -837,6 +1112,25 @@ def review_analytics(
             prev_self = self_grade if self_grade is not None else prev_self
             prev_peer = peer_grade if peer_grade is not None else prev_peer
             entry.pop("period_order", None)
+            total_self_correct += entry.get("self_correct", 0)
+            total_self_answers += entry.get("self_total", 0)
+            total_peer_correct += entry.get("peer_correct", 0)
+            total_peer_answers += entry.get("peer_total", 0)
+
+        payload["self_accuracy"] = (
+            round(total_self_correct / total_self_answers * 100, 2)
+            if total_self_answers
+            else None
+        )
+        payload["peer_accuracy"] = (
+            round(total_peer_correct / total_peer_answers * 100, 2)
+            if total_peer_answers
+            else None
+        )
+        payload["self_correct"] = total_self_correct
+        payload["self_total"] = total_self_answers
+        payload["peer_correct"] = total_peer_correct
+        payload["peer_total"] = total_peer_answers
 
     overall_self = _weighted_average(overall_self_sum, overall_self_weight) or 0
     overall_peer = _weighted_average(overall_peer_sum, overall_peer_weight) or 0
@@ -1928,6 +2222,13 @@ def skill_review_overview(employer: Employer) -> Dict:
     if len(completed_scores) >= 2:
         last_growth = round(completed_scores[-1][1] - completed_scores[-2][1], 2)
 
+    category_analytics = analytics_payload.get("analytics", []) if isinstance(analytics_payload, dict) else []
+
+    overall_self_correct = sum(item.get("self_correct", 0) for item in category_analytics)
+    overall_self_total = sum(item.get("self_total", 0) for item in category_analytics)
+    overall_peer_correct = sum(item.get("peer_correct", 0) for item in category_analytics)
+    overall_peer_total = sum(item.get("peer_total", 0) for item in category_analytics)
+
     summary = {
         "self_average": round(self_average, 2) if self_average is not None else 0,
         "peer_average": round(peer_average, 2) if peer_average is not None else 0,
@@ -1955,6 +2256,12 @@ def skill_review_overview(employer: Employer) -> Dict:
         "bias_tendency": bias_tendency,
         "goal_bias_delta": round(goal_bias_delta, 2) if goal_bias_delta is not None else None,
         "last_growth": last_growth,
+        "objective_self_accuracy": round((overall_self_correct / overall_self_total) * 100, 2)
+        if overall_self_total
+        else None,
+        "objective_peer_accuracy": round((overall_peer_correct / overall_peer_total) * 100, 2)
+        if overall_peer_total
+        else None,
     }
 
     if overdue_entries:
@@ -2010,6 +2317,67 @@ def skill_review_overview(employer: Employer) -> Dict:
         },
     }
 
+    insights: List[Dict[str, object]] = []
+    strengths: List[str] = []
+    risks: List[str] = []
+    action_points: List[str] = []
+
+    if summary["objective_peer_accuracy"] is not None and summary["objective_peer_accuracy"] >= 75:
+        strengths.append("Команда стабильно подтверждает результаты объективными ответами.")
+    if summary["objective_self_accuracy"] is not None and summary["objective_self_accuracy"] >= 75:
+        strengths.append("Самооценка в объективных заданиях держится на высоком уровне.")
+
+    if summary["punctuality_score"] < 60:
+        risks.append("Падающая дисциплина по срокам сдачи тестов.")
+        action_points.append("Запустите напоминания за 3 дня до дедлайна и контролируйте закрытие форм.")
+        insights.append(
+            {
+                "title": "Подтянуть дисциплину",
+                "category": "Пунктуальность",
+                "tone": "warning",
+                "message": "Средний штраф за просрочки превышает норму. Введите обязательные напоминания и установите короткие окна сдачи.",
+            }
+        )
+
+    if bias_tendency == "self_overestimates":
+        action_points.append("Проведите сессии обратной связи один на один и сопоставьте ожидания.")
+        insights.append(
+            {
+                "title": "Сбалансировать самооценку",
+                "category": "Самоощущение",
+                "tone": "info",
+                "message": "Самооценка выше оценок коллег. Запланируйте обсуждение расхождений и уточните критерии успеха.",
+            }
+        )
+    elif bias_tendency == "self_underestimates":
+        strengths.append("Сотрудник критичен к себе — это потенциал для роста при поддержке руководителя.")
+
+    for item in category_analytics:
+        category_name = item.get("category")
+        peer_accuracy = item.get("peer_accuracy")
+        if peer_accuracy is not None and peer_accuracy < 55:
+            risks.append(f"Низкий объективный результат по категории «{category_name}»." )
+            action_points.append(f"Подготовьте практические задачи и мини-воркшоп для категории «{category_name}»." )
+            insights.append(
+                {
+                    "title": "Зона развития",
+                    "category": category_name,
+                    "tone": "danger",
+                    "message": f"Точность ответов коллег по категории «{category_name}» ниже 55%. Запланируйте дополнительное обучение.",
+                }
+            )
+        elif peer_accuracy is not None and peer_accuracy >= 80:
+            strengths.append(f"Категория «{category_name}» подтверждена коллегами на высоком уровне.")
+
+    if summary["objective_peer_accuracy"] is None or summary["objective_peer_accuracy"] < 40:
+        action_points.append("Убедитесь, что вопросы адаптированы под специфику отдела и не вызывают двусмысленных трактовок.")
+
+    recommendations = {
+        "strengths": list(dict.fromkeys(strengths)),
+        "risks": list(dict.fromkeys(risks)),
+        "actions": list(dict.fromkeys(action_points)),
+    }
+
     return {
         "status": "success",
         "employer_id": employer.id,
@@ -2017,12 +2385,14 @@ def skill_review_overview(employer: Employer) -> Dict:
         "position": employer.position,
         "activation_date": base_date.isoformat(),
         "timeline": timeline,
-    "score_trend": score_trend,
+        "score_trend": score_trend,
         "next_review": next_review,
         "active_review": active_review,
         "summary": summary,
         "analytics": analytics_payload,
         "reputation": reputation,
+        "insights": insights,
+        "recommendations": recommendations,
     }
 
 

@@ -90,17 +90,44 @@ class SkillCategory(TimeStampedModel):
 
 class SkillQuestion(TimeStampedModel):
 
+    class Context(models.TextChoices):
+        SELF = "self", "Самооценка"
+        PEER = "peer", "Оценка 360"
+        BOTH = "both", "Самооценка и 360"
+
+    class AnswerType(models.TextChoices):
+        SCALE = "scale", "Шкала"
+        NUMERIC = "numeric", "Числовой ответ"
+        SINGLE_CHOICE = "single_choice", "Один вариант"
+        BOOLEAN = "boolean", "Да/Нет"
+
     category = models.ForeignKey(SkillCategory, on_delete=models.CASCADE, related_name="questions")
     question_text = models.TextField()
     grade_description = models.TextField()
     weight = models.PositiveIntegerField(default=1, help_text="Weight multiplier for aggregated scores")
     is_active = models.BooleanField(default=True)
+    context = models.CharField(max_length=10, choices=Context.choices, default=Context.BOTH)
+    answer_type = models.CharField(max_length=20, choices=AnswerType.choices, default=AnswerType.SCALE)
+    scale_min = models.PositiveSmallIntegerField(default=0)
+    scale_max = models.PositiveSmallIntegerField(default=10)
+    answer_options = models.JSONField(default=list, blank=True)
+    correct_answer = models.JSONField(null=True, blank=True)
+    difficulty = models.CharField(max_length=32, blank=True, default="")
+    tolerance = models.FloatField(default=0)
+    departments = models.ManyToManyField(
+        "api.Department",
+        blank=True,
+        related_name="skill_questions",
+        help_text="Если не выбрано ни одного отдела, вопрос доступен для всех",
+    )
 
     class Meta:
         ordering = ["category", "created_at"]
 
     def __str__(self) -> str:
-        return f"{self.category.name}: {self.question_text[:80]}"
+        dept_names = list(self.departments.values_list("name", flat=True)[:3]) if self.pk else []
+        scope = "общий" if not dept_names else ", ".join(dept_names)
+        return f"{self.category.name} • {scope}: {self.question_text[:80]}"
 
 
 class ReviewLog(TimeStampedModel):
@@ -179,6 +206,8 @@ class ReviewAnswer(TimeStampedModel):
     question = models.ForeignKey(SkillQuestion, on_delete=models.CASCADE, related_name="answers")
     question_type = models.CharField(max_length=10, choices=SkillCategory.SKILL_TYPES)
     grade = models.PositiveSmallIntegerField(default=0)
+    answer_value = models.JSONField(default=dict, blank=True)
+    is_correct = models.BooleanField(null=True, blank=True)
 
     class Meta:
         unique_together = ("employer", "respondent", "period", "question")

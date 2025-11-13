@@ -1,6 +1,10 @@
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 
 from . import views
+
+router = DefaultRouter()
+router.register(r"skill-questions", views.SkillQuestionViewSet, basename="skill-question")
 
 urlpatterns = [
     path("review/initiate/", views.ReviewCycleInitiateView.as_view(), name="review-initiate"),
@@ -27,3 +31,5 @@ urlpatterns = [
         name="notifications-mark-all",
     ),
 ]
+
+urlpatterns += router.urls

@@ -3,19 +3,21 @@ from datetime import date, timedelta
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import permissions, status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters as drf_filters, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from api.models import Employee
-from .models import Employer, ReviewGoal, ReviewPeriod, ReviewTask, SiteNotification
+from .models import Employer, ReviewGoal, ReviewPeriod, ReviewTask, SiteNotification, SkillQuestion
 from .serializers import (
     AdaptationIndexQuerySerializer,
     AnalyticsQuerySerializer,
     NotificationSerializer,
     ReviewCycleTriggerSerializer,
     ReviewSubmitSerializer,
+    SkillQuestionSerializer,
     SkillReviewFeedbackSubmitSerializer,
     SkillReviewQueueItemSerializer,
     TaskGoalCreateSerializer,
@@ -450,3 +452,54 @@ class NotificationMarkAllView(APIView):
             updated_at=now,
         )
         return Response({"status": "success", "updated": updated})
+
+
+class SkillQuestionViewSet(viewsets.ModelViewSet):
+    queryset = (
+        SkillQuestion.objects.select_related("category")
+        .prefetch_related("departments")
+        .order_by("category__skill_type", "category__name", "created_at")
+    )
+    serializer_class = SkillQuestionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields = {
+        "category": ["exact"],
+        "category__skill_type": ["exact"],
+        "context": ["exact"],
+        "is_active": ["exact"],
+        "departments": ["exact"],
+    }
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "weight",
+        "category__name",
+        "category__skill_type",
+    ]
+    search_fields = ["question_text", "grade_description"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.is_superuser:
+            return queryset
+
+        employee = Employee.objects.filter(user=self.request.user).first()
+        if employee and employee.has_global_visibility():
+            return queryset
+
+        return queryset.filter(is_active=True)
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+
+        user = self.request.user
+        if user.is_superuser:
+            return [permissions.IsAuthenticated()]
+
+        employee = Employee.objects.filter(user=user).first()
+        if employee and employee.has_global_visibility():
+            return [permissions.IsAuthenticated()]
+
+        return [permissions.IsAdminUser()]
