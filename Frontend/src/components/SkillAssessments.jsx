@@ -203,6 +203,7 @@ function SkillAssessments() {
 
   const metrics = useMemo(() => {
     const formatNumber = (value, fallback = '—') => (value != null ? Number(value).toFixed(1) : fallback);
+    const formatPercent = (value) => (value != null ? `${Number(value).toFixed(1)}%` : '—');
     return {
       selfAvg: formatNumber(summary.self_average),
       peerAvg: formatNumber(summary.peer_average),
@@ -215,6 +216,8 @@ function SkillAssessments() {
       completedTests: summary.tests_completed ?? timeline.filter((item) => item.status === 'completed').length,
       awaitingFeedback: summary.waiting_feedback ?? 0,
       overdue: summary.overdue_reviews ?? 0,
+      objectiveSelfAccuracy: formatPercent(summary.objective_self_accuracy),
+      objectivePeerAccuracy: formatPercent(summary.objective_peer_accuracy),
     };
   }, [summary, timeline]);
 
@@ -237,6 +240,12 @@ function SkillAssessments() {
       },
     ];
   }, [reputation]);
+
+  const insights = Array.isArray(overview?.insights) ? overview.insights : [];
+  const recommendations = overview?.recommendations || {};
+  const strengths = Array.isArray(recommendations.strengths) ? recommendations.strengths : [];
+  const risks = Array.isArray(recommendations.risks) ? recommendations.risks : [];
+  const actions = Array.isArray(recommendations.actions) ? recommendations.actions : [];
 
   const handleOpenReview = (entry) => {
     if (!entry?.token) {
@@ -339,10 +348,10 @@ function SkillAssessments() {
   };
 
   const isTeamView = viewMode === 'team';
-  const headerTitle = isTeamView ? 'Командные оценки навыков' : 'Тесты навыков';
+  const headerTitle = isTeamView ? 'Командные оценки навыков' : 'Динамика навыков и точности';
   const headerSubtitle = isTeamView
-    ? 'Контролируйте прохождение тестов вашей команды и оставляйте своевременный фидбек.'
-    : 'Отслеживайте собственные тесты по навыкам, динамику развития и собирайте обратную связь вовремя.';
+    ? 'Контролируйте прохождение тестов команды, точность ответов и оставляйте своевременный фидбек.'
+    : 'Отслеживайте собственные тесты, объективность ответов и собирайте обратную связь вовремя.';
 
   return (
     <div className="page">
@@ -430,6 +439,16 @@ function SkillAssessments() {
               <h3>Пунктуальность</h3>
               <p className="insight-number">{metrics.punctuality}</p>
               <p className="insight-meta">Индекс дисциплины</p>
+            </article>
+            <article className="insight-card">
+              <h3>Точность Self</h3>
+              <p className="insight-number success">{metrics.objectiveSelfAccuracy}</p>
+              <p className="insight-meta">Объективные задания</p>
+            </article>
+            <article className="insight-card">
+              <h3>Точность 360</h3>
+              <p className="insight-number accent">{metrics.objectivePeerAccuracy}</p>
+              <p className="insight-meta">Балл от коллег</p>
             </article>
           </div>
 
@@ -536,6 +555,75 @@ function SkillAssessments() {
               )}
             </div>
           </div>
+
+          {(insights.length > 0 || strengths.length > 0 || risks.length > 0 || actions.length > 0) && (
+            <div className="insights-section mt-24">
+              {insights.length > 0 && (
+                <section className="panel">
+                  <header className="panel-header">
+                    <div>
+                      <h3>Автоматические инсайты</h3>
+                      <span className="panel-subtitle">Выявленные паттерны по объективным ответам и поведению</span>
+                    </div>
+                  </header>
+                  <div className="insights-list">
+                    {insights.map((item) => (
+                      <article key={`${item.category}-${item.title}`} className={`insight-card detailed tone-${item.tone || 'info'}`}>
+                        <header>
+                          <h4>{item.title}</h4>
+                          {item.category && <span className="tag muted">{item.category}</span>}
+                        </header>
+                        <p>{item.message}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {(strengths.length > 0 || risks.length > 0 || actions.length > 0) && (
+                <section className="panel recommendations-panel">
+                  <header className="panel-header">
+                    <div>
+                      <h3>Рекомендации</h3>
+                      <span className="panel-subtitle">Сфокусируйтесь на сильных сторонах и планируйте шаги развития</span>
+                    </div>
+                  </header>
+                  <div className="recommendations-grid">
+                    {strengths.length > 0 && (
+                      <div className="recommendation-column">
+                        <h4>Сильные стороны</h4>
+                        <ul>
+                          {strengths.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {risks.length > 0 && (
+                      <div className="recommendation-column">
+                        <h4>Зоны риска</h4>
+                        <ul>
+                          {risks.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {actions.length > 0 && (
+                      <div className="recommendation-column">
+                        <h4>Следующие шаги</h4>
+                        <ul>
+                          {actions.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
 
           {reputation && (
             <div className="reputation-section mt-24">

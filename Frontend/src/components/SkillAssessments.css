@@ -286,6 +286,109 @@
   min-height: 280px;
 }
 
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.panel-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.insights-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.insight-card.detailed {
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.insight-card.detailed header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insight-card.detailed h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.insight-card.detailed p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.insight-card.tone-info {
+  border-left: 3px solid var(--color-info);
+}
+
+.insight-card.tone-warning {
+  border-left: 3px solid var(--color-warning);
+}
+
+.insight-card.tone-danger {
+  border-left: 3px solid var(--color-error);
+}
+
+.insight-card.tone-success {
+  border-left: 3px solid var(--color-success);
+}
+
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.recommendations-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.recommendations-panel li {
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.recommendation-column h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recommendation-column {
+  display: flex;
+  flex-direction: column;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

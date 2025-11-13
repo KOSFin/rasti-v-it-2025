@@ -16,6 +16,7 @@ import Reports from './components/Reports';
 import AdminUsers from './components/AdminUsers';
 import AdminDepartments from './components/AdminDepartments';
 import AdminTeams from './components/AdminTeams';
+import AdminSkillQuestions from './components/AdminSkillQuestions';
 import SkillReview from './components/reviews/SkillReview';
 import TaskReview from './components/reviews/TaskReview';
 import './App.css';
@@ -202,6 +203,14 @@ function App() {
               element={
                 <PrivateRoute requireAdmin>
                   <AdminTeams />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/skill-questions"
+              element={
+                <PrivateRoute requireAdmin>
+                  <AdminSkillQuestions />
                 </PrivateRoute>
               }
             />

@@ -315,3 +315,15 @@ export const updateAssessmentQuestion = (id, data) =>
 
 export const deleteAssessmentQuestion = (id) =>
   api.delete(`/api/assessment-questions/${id}/`);
+
+export const listSkillQuestions = (params) =>
+  api.get('/api/performance/skill-questions/', params ? { params } : undefined);
+
+export const createSkillQuestion = (data) =>
+  api.post('/api/performance/skill-questions/', data);
+
+export const updateSkillQuestion = (id, data) =>
+  api.patch(`/api/performance/skill-questions/${id}/`, data);
+
+export const deleteSkillQuestion = (id) =>
+  api.delete(`/api/performance/skill-questions/${id}/`);

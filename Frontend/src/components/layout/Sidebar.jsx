@@ -14,6 +14,7 @@ import {
   FiLayers,
   FiUserCheck,
   FiGitBranch,
+  FiBookOpen,
 } from 'react-icons/fi';
 import { getGoals, getTasks, updateTask } from '../../api/services';
 import { useAuth } from '../../contexts/AuthContext';
@@ -171,6 +172,7 @@ const Sidebar = () => {
           { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' },
           { path: '/admin/departments', icon: FiLayers, label: 'Отделы' },
           { path: '/admin/teams', icon: FiGitBranch, label: 'Команды' },
+          { path: '/admin/skill-questions', icon: FiBookOpen, label: 'Навыковые вопросы' },
         ],
       });
     }
