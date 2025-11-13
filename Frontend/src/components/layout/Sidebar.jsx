@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   FiHome,
   FiTarget,
-  FiCheckSquare,
   FiFileText,
   FiUsers,
   FiGrid,
@@ -138,42 +137,66 @@ const Sidebar = () => {
     }
   };
 
-  const navItems = [
-    { path: '/dashboard', icon: FiHome, label: 'Обзор' },
-    { path: '/goals', icon: FiTarget, label: 'Цели и задачи' },
-    { path: '/skills-assessments', icon: FiTrendingUp, label: 'Навыки' },
-    { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
-    { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
-    ...(canSeeNineBox ? [{ path: '/nine-box', icon: FiGrid, label: 'Nine Box' }] : []),
-  ];
+  const navSections = useMemo(() => {
+    const sections = [];
 
-  if (!isAdmin && !isManager) {
-    navItems.splice(1, 0, { path: '/colleagues', icon: FiUsers, label: 'Коллеги' });
-  }
+    const mainItems = [
+      { path: '/dashboard', icon: FiHome, label: 'Обзор' },
+      { path: '/goals', icon: FiTarget, label: isManager || isAdmin ? 'Цели и задачи' : 'Мои цели' },
+      ...(!isAdmin && !isManager ? [{ path: '/colleagues', icon: FiUsers, label: 'Коллеги' }] : []),
+      { path: '/skills-assessments', icon: FiTrendingUp, label: 'Навыки' },
+      { path: '/self-assessment', icon: FiFileText, label: 'Самооценка' },
+      { path: '/feedback-360', icon: FiUserCheck, label: 'Оценка 360°' },
+    ].filter(Boolean);
 
-  if (isManager || isAdmin) {
-    navItems.splice(1, 0, { path: '/team', icon: FiUsers, label: 'Команда' });
-    navItems.splice(2, 0, { path: '/reports', icon: FiBarChart2, label: 'Отчеты' });
-  }
+    sections.push({ label: 'Рабочая зона', items: mainItems });
 
-  if (isAdmin) {
-    navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
-    navItems.splice(2, 0, { path: '/admin/departments', icon: FiLayers, label: 'Отделы' });
-    navItems.splice(3, 0, { path: '/admin/teams', icon: FiGitBranch, label: 'Команды' });
-  }
+    if (isManager || isAdmin) {
+      const teamItems = [
+        { path: '/team', icon: FiUsers, label: 'Команда' },
+        { path: '/reports', icon: FiBarChart2, label: 'Отчеты' },
+      ];
+      if (canSeeNineBox) {
+        teamItems.push({ path: '/nine-box', icon: FiGrid, label: 'Nine Box' });
+      }
+      sections.push({ label: 'Управление командой', items: teamItems });
+    } else if (canSeeNineBox) {
+      sections.push({ label: 'Аналитика', items: [{ path: '/nine-box', icon: FiGrid, label: 'Nine Box' }] });
+    }
+
+    if (isAdmin) {
+      sections.push({
+        label: 'Администрирование',
+        items: [
+          { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' },
+          { path: '/admin/departments', icon: FiLayers, label: 'Отделы' },
+          { path: '/admin/teams', icon: FiGitBranch, label: 'Команды' },
+        ],
+      });
+    }
+
+    return sections.filter((section) => section.items.length > 0);
+  }, [canSeeNineBox, isAdmin, isManager]);
 
   return (
     <aside className="sidebar">
       <nav className="sidebar-nav">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-          >
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </NavLink>
+        {navSections.map((section) => (
+          <div key={section.label} className="sidebar-section">
+            <p className="sidebar-section-label">{section.label}</p>
+            <div className="sidebar-links">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

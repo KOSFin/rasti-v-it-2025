@@ -171,6 +171,15 @@ function NineBox() {
         </article>
       </section>
 
+      {!loading && !error && matrixData.length === 0 && (
+        <div className="page-banner info">
+          <span>
+            Пока нет оценок потенциала. Создайте оценку в разделе «Отчеты» или импортируйте результаты, чтобы заполнить
+            матрицу талантов.
+          </span>
+        </div>
+      )}
+
       <section className="panel matrix-panel">
         <header className="panel-header">
           <div>

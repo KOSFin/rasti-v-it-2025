@@ -12,6 +12,48 @@
   align-items: flex-start;
 }
 
+.sync-callout {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 24px;
+  border-radius: 18px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.sync-callout h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.sync-callout p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 560px;
+}
+
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(76, 175, 80, 0.35);
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--color-success);
+  font-weight: 600;
+  cursor: default;
+}
+
+.sync-badge svg {
+  flex-shrink: 0;
+}
+
 .page-overline {
   display: inline-flex;
   align-items: center;

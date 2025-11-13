@@ -55,7 +55,11 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 
 class TeamViewSet(viewsets.ModelViewSet):
-    queryset = Team.objects.select_related('department', 'parent').all()
+    queryset = (
+        Team.objects.select_related('department', 'parent')
+        .prefetch_related('role_assignments__employee__user')
+        .all()
+    )
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

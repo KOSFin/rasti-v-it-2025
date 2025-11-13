@@ -210,6 +210,27 @@
 }
 
 .modal-backdrop {
+
+.team-card footer .manager-assigned {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.team-card footer .manager-assigned strong {
+  color: var(--text-primary);
+}
+
+.team-card footer .manager-assigned a {
+  color: var(--color-accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.team-card footer .manager-assigned a:hover {
+  text-decoration: underline;
+}
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.48);

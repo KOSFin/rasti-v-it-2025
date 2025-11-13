@@ -99,6 +99,9 @@ class TeamSerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source='parent.name', read_only=True)
     organization_id = serializers.IntegerField(source='department.organization_id', read_only=True)
     organization_name = serializers.CharField(source='department.organization.name', read_only=True)
+    manager_id = serializers.SerializerMethodField()
+    manager_name = serializers.SerializerMethodField()
+    manager_email = serializers.SerializerMethodField()
 
     class Meta:
         model = Team
@@ -112,7 +115,55 @@ class TeamSerializer(serializers.ModelSerializer):
             'organization_name',
             'parent',
             'parent_name',
+            'manager_id',
+            'manager_name',
+            'manager_email',
         ]
+
+    def _active_team_lead(self, obj):
+        cached = getattr(obj, '_cached_team_lead', None)
+        if cached is not None:
+            return cached or None
+
+        assignments = getattr(obj, 'role_assignments', None)
+        if assignments is None:
+            obj._cached_team_lead = False
+            return None
+        candidate_iterable = assignments.all() if hasattr(assignments, 'all') else assignments
+        for assignment in candidate_iterable:
+            if (
+                assignment.role == EmployeeRoleAssignment.Role.TEAM_LEAD
+                and assignment.is_active
+                and assignment.revoked_at is None
+                and assignment.employee_id
+            ):
+                obj._cached_team_lead = assignment
+                return assignment
+        obj._cached_team_lead = False
+        return None
+
+    def get_manager_id(self, obj):
+        assignment = self._active_team_lead(obj)
+        return assignment.employee_id if assignment else None
+
+    def get_manager_name(self, obj):
+        assignment = self._active_team_lead(obj)
+        if not assignment or not assignment.employee_id:
+            return ''
+        employee = assignment.employee
+        if hasattr(employee, 'user') and employee.user:
+            full_name = employee.user.get_full_name()
+            return full_name or employee.user.username
+        return ''
+
+    def get_manager_email(self, obj):
+        assignment = self._active_team_lead(obj)
+        if not assignment or not assignment.employee_id:
+            return ''
+        employee = assignment.employee
+        if hasattr(employee, 'user') and employee.user:
+            return employee.user.email or ''
+        return ''
 
 
 class EmployeeRoleAssignmentSerializer(serializers.ModelSerializer):

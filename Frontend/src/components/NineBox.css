@@ -94,6 +94,11 @@
   color: var(--color-error);
 }
 
+.page-banner.info {
+  background: var(--info-surface, rgba(33, 150, 243, 0.12));
+  color: var(--color-info, #2196f3);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

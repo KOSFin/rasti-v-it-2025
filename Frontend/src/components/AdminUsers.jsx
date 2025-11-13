@@ -512,6 +512,19 @@ function AdminUsers() {
         </div>
       </header>
 
+      <section className="sync-callout" aria-live="polite">
+        <div>
+          <h2>Синхронизация сотрудников</h2>
+          <p>
+            Пользователи автоматически синхронизируются с 1C. Для ручных обновлений обратитесь к администратору
+            интеграции.
+          </p>
+        </div>
+        <button type="button" className="sync-badge" disabled>
+          <FiRefreshCw size={16} /> Синхронизация активна
+        </button>
+      </section>
+
       {credentialsNotice && (
         <div className="page-banner success">
           <span>

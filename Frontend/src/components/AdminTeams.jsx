@@ -307,7 +307,25 @@ function AdminTeams() {
                 </header>
                 {team.description && <p className="team-description">{team.description}</p>}
                 <footer>
-                  <span><FiUsers size={14} /> Менеджер: {team.manager_name || 'Не назначен'}</span>
+                  <span className={team.manager_name ? 'manager-assigned' : ''}>
+                    <FiUsers size={14} />
+                    {team.manager_name ? (
+                      <>
+                        <span>Менеджер:</span>
+                        <strong>{team.manager_name}</strong>
+                        {team.manager_email && (
+                          <a
+                            href={`mailto:${team.manager_email}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {team.manager_email}
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      <span>Менеджер: Не назначен</span>
+                    )}
+                  </span>
                   {parentTeam && <span><FiGitBranch size={14} /> Родитель: {parentTeam.name}</span>}
                 </footer>
               </article>

@@ -46,6 +46,39 @@
   box-shadow: var(--shadow-md);
 }
 
+.dashboard-hero.admin-hero {
+  gap: 28px;
+}
+
+.dashboard-hero.admin-hero .btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-hero.admin-hero .btn.btn-secondary {
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.dashboard-hero.admin-hero .btn.btn-secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-light);
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
 .hero-overline {
   font-size: 13px;
   letter-spacing: 0.6px;
@@ -204,6 +237,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 18px;
+}
+
+.insights-grid.admin-structure {
+  gap: 16px;
 }
 
 .insight-card {
@@ -380,6 +417,48 @@
   justify-content: space-between;
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.talent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.talent-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.talent-list li div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.talent-list li strong {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.talent-list li span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.talent-list .tag {
+  white-space: nowrap;
+}
+
+.talent-list.risk li {
+  border-color: rgba(244, 67, 54, 0.24);
+  background: var(--status-danger-bg);
 }
 
 .tasks-list,

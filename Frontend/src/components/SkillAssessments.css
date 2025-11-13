@@ -1,3 +1,108 @@
+.page-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  margin-bottom: 24px;
+}
+
+.page-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.page-tab:hover {
+  color: var(--text-primary);
+}
+
+.page-tab.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.manager-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.manager-summary-card {
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.manager-summary-card .label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-tertiary);
+}
+
+.manager-summary-card .value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.manager-summary-card.tone-accent {
+  border-color: rgba(255, 107, 53, 0.25);
+  background: rgba(255, 107, 53, 0.08);
+}
+
+.manager-summary-card.tone-accent .value {
+  color: var(--color-accent);
+}
+
+.manager-summary-card.tone-warning {
+  border-color: rgba(255, 152, 0, 0.28);
+  background: rgba(255, 152, 0, 0.12);
+}
+
+.manager-summary-card.tone-warning .value {
+  color: var(--color-warning);
+}
+
+.manager-summary-card.tone-danger {
+  border-color: rgba(244, 67, 54, 0.28);
+  background: rgba(244, 67, 54, 0.12);
+}
+
+.manager-summary-card.tone-danger .value {
+  color: var(--color-error);
+}
+
+.manager-summary-card.tone-info {
+  border-color: rgba(33, 150, 243, 0.24);
+  background: rgba(33, 150, 243, 0.12);
+}
+
+.manager-summary-card.tone-info .value {
+  color: var(--color-info, #2196f3);
+}
+
+.manager-summary-card.tone-success {
+  border-color: rgba(76, 175, 80, 0.24);
+  background: rgba(76, 175, 80, 0.12);
+}
+
+.manager-summary-card.tone-success .value {
+  color: var(--color-success);
+}
+
 .skill-assessment-table {
   width: 100%;
   border-collapse: collapse;

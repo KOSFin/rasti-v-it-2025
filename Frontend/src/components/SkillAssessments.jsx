@@ -74,6 +74,9 @@ function SkillAssessments() {
 
   const role = employee?.role || (user?.is_superuser ? 'admin' : null);
   const canProvideFeedback = Boolean(user?.is_superuser || ['manager', 'admin', 'business_partner'].includes(role));
+  const isSuperAdmin = Boolean(user?.is_superuser);
+  const showTeamView = Boolean(canProvideFeedback);
+  const [viewMode, setViewMode] = useState(() => (showTeamView && isSuperAdmin ? 'team' : 'personal'));
 
   const loadOverview = useCallback(async () => {
     if (!employee && !user?.is_superuser) {
@@ -123,10 +126,45 @@ function SkillAssessments() {
   }, [loadOverview]);
 
   useEffect(() => {
+    if (!showTeamView) {
+      setViewMode('personal');
+    }
+  }, [showTeamView]);
+
+  useEffect(() => {
     if (canProvideFeedback) {
       loadManagerQueue();
     }
   }, [canProvideFeedback, loadManagerQueue]);
+
+  const queueSummary = useMemo(() => {
+    const stats = managerQueue?.stats || {};
+    const items = Array.isArray(managerQueue?.items) ? managerQueue.items : [];
+    const now = new Date();
+    const dueSoon = items.filter((item) => {
+      if (!item?.due_date) {
+        return false;
+      }
+      const due = new Date(item.due_date);
+      const diff = Math.floor((due - now) / (1000 * 60 * 60 * 24));
+      return diff >= 0 && diff <= 3;
+    }).length;
+    const overdue = items.filter((item) => (item?.days_overdue ?? 0) > 0).length;
+    return [
+      { label: 'В ожидании', value: stats.pending ?? 0, tone: 'accent' },
+      { label: 'Ждут фидбека', value: stats.awaiting_feedback ?? 0, tone: 'warning' },
+      { label: 'Просрочено', value: overdue, tone: 'danger' },
+      { label: 'Ближайшие 3 дня', value: dueSoon, tone: 'info' },
+      { label: 'Завершено', value: stats.completed ?? 0, tone: 'success' },
+    ];
+  }, [managerQueue]);
+
+  const queueSubtitle = useMemo(() => {
+    const stats = managerQueue?.stats || {};
+    const pending = stats.pending ?? 0;
+    const awaiting = stats.awaiting_feedback ?? 0;
+    return `В очереди ${pending} тест(ов) • ${awaiting} ждут фидбека`;
+  }, [managerQueue?.stats]);
 
   const timeline = overview?.timeline || [];
   const summary = overview?.summary || {};
@@ -300,26 +338,55 @@ function SkillAssessments() {
     }
   };
 
+  const isTeamView = viewMode === 'team';
+  const headerTitle = isTeamView ? 'Командные оценки навыков' : 'Тесты навыков';
+  const headerSubtitle = isTeamView
+    ? 'Контролируйте прохождение тестов вашей команды и оставляйте своевременный фидбек.'
+    : 'Отслеживайте собственные тесты по навыкам, динамику развития и собирайте обратную связь вовремя.';
+
   return (
     <div className="page">
       <header className="page-header">
         <div>
-          <h1>Тесты навыков</h1>
-          <p className="page-subtitle">
-            Отслеживайте периодические тесты по софт- и хард-скиллам, контролируйте статус прохождения и
-            укрепляйте репутацию через своевременные ответы и обратную связь.
-          </p>
+          <h1>{headerTitle}</h1>
+          <p className="page-subtitle">{headerSubtitle}</p>
         </div>
-        <button type="button" className="btn ghost" onClick={loadOverview} disabled={loading}>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={isTeamView ? loadManagerQueue : loadOverview}
+          disabled={isTeamView ? queueLoading : loading}
+        >
           Обновить
         </button>
       </header>
 
-      {error && <div className="page-banner error">{error}</div>}
+      {showTeamView && (
+        <div className="page-tabs">
+          <button
+            type="button"
+            className={`page-tab ${viewMode === 'personal' ? 'active' : ''}`}
+            onClick={() => setViewMode('personal')}
+          >
+            Личные метрики
+          </button>
+          <button
+            type="button"
+            className={`page-tab ${isTeamView ? 'active' : ''}`}
+            onClick={() => setViewMode('team')}
+          >
+            Команда
+          </button>
+        </div>
+      )}
 
-      <section className="page-section">
-        <article className="panel">
-          <header className="panel-header">
+      {viewMode === 'personal' && (
+        <>
+          {error && <div className="page-banner error">{error}</div>}
+
+          <section className="page-section">
+            <article className="panel">
+              <header className="panel-header">
             <div>
               <h2>Личная динамика</h2>
               <span className="panel-subtitle">База активирована {formatDate(activationDate)}</span>
@@ -569,21 +636,30 @@ function SkillAssessments() {
           </div>
         </article>
       </section>
+    </>
+      )}
 
-      {canProvideFeedback && (
+      {viewMode === 'team' && canProvideFeedback && (
         <section className="page-section">
           <article className="panel">
             <header className="panel-header">
               <div>
                 <h2>Очередь фидбеков</h2>
-                <span className="panel-subtitle">
-                  {managerQueue.stats.awaiting_feedback} тест(ов) ждут комментария руководителя
-                </span>
+                <span className="panel-subtitle">{queueSubtitle}</span>
               </div>
               <button type="button" className="btn ghost" onClick={loadManagerQueue} disabled={queueLoading}>
                 Обновить список
               </button>
             </header>
+
+            <div className="manager-summary">
+              {queueSummary.map((metric) => (
+                <article key={metric.label} className={`manager-summary-card tone-${metric.tone}`}>
+                  <span className="label">{metric.label}</span>
+                  <span className="value">{metric.value}</span>
+                </article>
+              ))}
+            </div>
 
             {queueError && <div className="page-banner error">{queueError}</div>}
 
