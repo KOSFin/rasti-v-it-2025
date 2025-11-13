@@ -18,6 +18,8 @@
 .notification-button svg {
   width: 18px;
   height: 18px;
+  stroke: currentColor;
+  fill: none;
 }
 
 .notification-button:hover,
@@ -157,6 +159,8 @@
 .mark-all svg {
   width: 14px;
   height: 14px;
+  stroke: currentColor;
+  fill: none;
 }
 
 .mark-all:hover {
@@ -183,6 +187,8 @@
   .notification-button svg {
     width: 16px;
     height: 16px;
+    stroke: currentColor;
+    fill: none;
   }
 
   .notification-badge {
