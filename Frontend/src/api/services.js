@@ -46,6 +46,13 @@ const collectPaginatedResults = async (path, initialParams = {}) => {
   };
 };
 
+const buildListFetcher = (path) => ({ url, params } = {}) => {
+  if (url) {
+    return api.get(url);
+  }
+  return api.get(path, params ? { params } : undefined);
+};
+
 export const login = (username, password) => 
   api.post('/api/auth/login/', { username, password });
 
@@ -61,8 +68,21 @@ export const getCurrentUser = () =>
 export const adminCreateEmployee = (payload) =>
   api.post('/api/auth/admin/create-employee/', payload);
 
-export const getDepartments = () => 
-  api.get('/api/departments/');
+export const listOrganizations = buildListFetcher('/api/organizations/');
+
+export const createOrganization = (data) =>
+  api.post('/api/organizations/', data);
+
+export const updateOrganization = (id, data) =>
+  api.patch(`/api/organizations/${id}/`, data);
+
+export const deleteOrganization = (id) =>
+  api.delete(`/api/organizations/${id}/`);
+
+export const getDepartments = (params) =>
+  api.get('/api/departments/', params ? { params } : undefined);
+
+export const listDepartments = buildListFetcher('/api/departments/');
 
 export const getDepartment = (id) => 
   api.get(`/api/departments/${id}/`);
@@ -71,13 +91,26 @@ export const createDepartment = (data) =>
   api.post('/api/departments/', data);
 
 export const updateDepartment = (id, data) =>
-  api.put(`/api/departments/${id}/`, data);
+  api.patch(`/api/departments/${id}/`, data);
 
 export const deleteDepartment = (id) =>
   api.delete(`/api/departments/${id}/`);
 
-export const getEmployees = (params) => 
+export const listTeams = buildListFetcher('/api/teams/');
+
+export const createTeam = (data) =>
+  api.post('/api/teams/', data);
+
+export const updateTeam = (id, data) =>
+  api.patch(`/api/teams/${id}/`, data);
+
+export const deleteTeam = (id) =>
+  api.delete(`/api/teams/${id}/`);
+
+export const getEmployees = (params) =>
   api.get('/api/employees/', { params });
+
+export const listEmployees = buildListFetcher('/api/employees/');
 
 export const getAllEmployees = async (params) => {
   const { items } = await collectPaginatedResults('/api/employees/', params);
@@ -104,6 +137,19 @@ export const deleteEmployee = (id) =>
 
 export const resetEmployeePassword = (id) =>
   api.post(`/api/employees/${id}/generate_password/`);
+
+export const listRoleAssignments = buildListFetcher('/api/role-assignments/');
+
+export const createRoleAssignment = (data) =>
+  api.post('/api/role-assignments/', data);
+
+export const updateRoleAssignment = (id, data) =>
+  api.patch(`/api/role-assignments/${id}/`, data);
+
+export const deleteRoleAssignment = (id) =>
+  api.delete(`/api/role-assignments/${id}/`);
+
+export const fetchByUrl = (url) => api.get(url);
 
 export const getGoals = (params) => 
   api.get('/api/goals/', { params });

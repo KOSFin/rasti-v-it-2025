@@ -9,6 +9,7 @@ from .models import (
     GoalEvaluationNotification,
     GoalParticipant,
     ManagerReview,
+    Organization,
     PotentialAssessment,
     SelfAssessment,
     Task,
@@ -16,6 +17,14 @@ from .models import (
     Feedback360,
     FinalReview,
 )
+
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    departments_count = serializers.IntegerField(source='departments.count', read_only=True)
+
+    class Meta:
+        model = Organization
+        fields = ['id', 'name', 'description', 'is_active', 'departments_count']
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -88,13 +97,27 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class TeamSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
     parent_name = serializers.CharField(source='parent.name', read_only=True)
+    organization_id = serializers.IntegerField(source='department.organization_id', read_only=True)
+    organization_name = serializers.CharField(source='department.organization.name', read_only=True)
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'description', 'department', 'department_name', 'parent', 'parent_name']
+        fields = [
+            'id',
+            'name',
+            'description',
+            'department',
+            'department_name',
+            'organization_id',
+            'organization_name',
+            'parent',
+            'parent_name',
+        ]
 
 
 class EmployeeRoleAssignmentSerializer(serializers.ModelSerializer):
+    employee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all())
+    employee_name = serializers.CharField(source='employee.user.get_full_name', read_only=True)
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     scope = serializers.SerializerMethodField()
     target_employee_name = serializers.CharField(source='target_employee.user.get_full_name', read_only=True)
@@ -102,8 +125,18 @@ class EmployeeRoleAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeRoleAssignment
         fields = [
-            'id', 'role', 'role_display', 'scope', 'organization', 'department',
-            'team', 'position', 'target_employee', 'target_employee_name',
+            'id',
+            'employee',
+            'employee_name',
+            'role',
+            'role_display',
+            'scope',
+            'organization',
+            'department',
+            'team',
+            'position',
+            'target_employee',
+            'target_employee_name',
             'is_active', 'assigned_at', 'revoked_at'
         ]
         read_only_fields = ['assigned_at', 'revoked_at']
@@ -118,6 +151,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     department_name = serializers.CharField(source='department.name', read_only=True)
     organization_name = serializers.CharField(source='department.organization.name', read_only=True)
+    organization_id = serializers.IntegerField(source='department.organization_id', read_only=True)
     user_is_staff = serializers.BooleanField(source='user.is_staff', read_only=True)
     user_is_superuser = serializers.BooleanField(source='user.is_superuser', read_only=True)
     position_name = serializers.CharField(source='position.title', read_only=True)
@@ -130,7 +164,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = [
-            'id', 'user', 'department', 'department_name', 'organization_name', 'position', 'position_title',
+            'id', 'user', 'department', 'department_name', 'organization_id', 'organization_name', 'position', 'position_title',
             'position_name', 'team', 'team_name', 'role', 'role_display', 'is_manager', 'hire_date',
             'full_name', 'email', 'username', 'user_is_staff', 'user_is_superuser',
             'can_manage_department', 'active_roles'
@@ -194,6 +228,7 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
+    position_title = serializers.CharField(max_length=200, required=False, allow_blank=True)
     position = serializers.PrimaryKeyRelatedField(
         queryset=DepartmentPosition.objects.select_related('department'),
         required=False,
@@ -238,6 +273,7 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
         username = (validated_data.pop('username', '') or '').strip().lower()
         hire_date = validated_data.pop('hire_date', None)
         position = validated_data.pop('position', None)
+        position_title = (validated_data.pop('position_title', '') or '').strip()
         role = validated_data.pop('role', Employee.Role.EMPLOYEE)
         is_superuser = validated_data.pop('is_superuser', False)
         team = validated_data.pop('team', None)
@@ -285,7 +321,7 @@ class AdminEmployeeCreateSerializer(serializers.Serializer):
             user=user,
             department=department,
             position=position,
-            position_title=position.title if position else 'Сотрудник',
+            position_title=position.title if position else (position_title or 'Сотрудник'),
             team=team,
             role=role,
             is_manager=is_manager or role == Employee.Role.MANAGER,

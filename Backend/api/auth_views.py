@@ -339,9 +339,15 @@ def logout(request):
                 if BlacklistedToken and OutstandingToken and jti:
                     outstanding = OutstandingToken.objects.filter(jti=jti).first()
                     if outstanding:
-                        BlacklistedToken.objects.get_or_create(token=outstanding)
+                        try:
+                            BlacklistedToken.objects.get_or_create(token=outstanding)
+                        except IntegrityError:
+                            pass
                     else:
-                        token.blacklist()
+                        try:
+                            token.blacklist()
+                        except IntegrityError:
+                            pass
                 else:
                     try:
                         token.blacklist()

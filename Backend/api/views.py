@@ -3,12 +3,33 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
 from rest_framework.exceptions import ValidationError, PermissionDenied
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Avg, Count
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import *
 from .serializers import *
+
+
+class OrganizationViewSet(viewsets.ModelViewSet):
+    queryset = Organization.objects.prefetch_related('departments').all()
+    serializer_class = OrganizationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'description']
+    ordering_fields = ['name']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [permission() for permission in self.permission_classes]
+        if self.request.user.is_superuser:
+            return [permission() for permission in self.permission_classes]
+        employee = Employee.objects.filter(user=self.request.user).first()
+        if employee and employee.has_global_visibility():
+            return [permission() for permission in self.permission_classes]
+        return [IsAdminUser()]
 
 @extend_schema_view(
     list=extend_schema(summary='Список отделов', tags=['Departments']),
@@ -19,11 +40,13 @@ from .serializers import *
     destroy=extend_schema(summary='Удалить отдел', tags=['Departments']),
 )
 class DepartmentViewSet(viewsets.ModelViewSet):
-    queryset = Department.objects.all()
+    queryset = Department.objects.select_related('organization', 'parent').prefetch_related('positions').all()
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['name']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['organization', 'parent', 'organization__is_active']
+    search_fields = ['name', 'description', 'organization__name']
+    ordering_fields = ['name']
 
     def get_permissions(self):
         if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -36,7 +59,7 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['department', 'parent']
+    filterset_fields = ['department', 'parent', 'department__organization']
     search_fields = ['name', 'department__name']
     ordering_fields = ['name']
 
@@ -64,8 +87,16 @@ class EmployeeRoleAssignmentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
-        'employee', 'role', 'organization', 'department', 'team', 'position',
-        'target_employee', 'is_active'
+        'employee',
+        'role',
+        'organization',
+        'department',
+        'team',
+        'position',
+        'target_employee',
+        'is_active',
+        'employee__department',
+        'employee__department__organization',
     ]
     search_fields = [
         'employee__user__first_name',
@@ -75,6 +106,7 @@ class EmployeeRoleAssignmentViewSet(viewsets.ModelViewSet):
         'department__name',
     ]
     ordering_fields = ['assigned_at', 'role']
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
@@ -121,9 +153,27 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['department', 'team', 'role', 'role_assignments__role']
-    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'position_title', 'team__name']
-    ordering_fields = ['hire_date', 'position_title']
+    filterset_fields = [
+        'department',
+        'team',
+        'role',
+        'role_assignments__role',
+        'department__organization',
+        'team__department',
+        'role_assignments__department',
+        'role_assignments__organization',
+    ]
+    search_fields = [
+        'user__username',
+        'user__first_name',
+        'user__last_name',
+        'user__email',
+        'position_title',
+        'position__title',
+        'department__name',
+        'team__name',
+    ]
+    ordering_fields = ['hire_date', 'position_title', 'user__last_name', 'user__first_name', 'department__name']
     manager_update_actions = {'update', 'partial_update'}
 
     def _current_employee(self):
@@ -635,6 +685,57 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
     filterset_fields = ['employee', 'goal']
     ordering_fields = ['created_at', 'calculated_score']
     
+    def _request_employee(self):
+        if not hasattr(self, '_cached_self_employee'):
+            self._cached_self_employee = Employee.objects.filter(user=self.request.user).first()
+        return self._cached_self_employee
+
+    @staticmethod
+    def _calculate_total_score(collaboration_raw, satisfaction_raw):
+        collaboration_value = int(collaboration_raw or 0)
+        satisfaction_value = int(satisfaction_raw or 0)
+        collaboration_score = min(max(collaboration_value, 0) // 4, 3)
+        satisfaction_score = min(max(satisfaction_value, 0) // 5, 2)
+        return collaboration_score + satisfaction_score
+
+    def _upsert_self_assessment(self, *, employee: Employee, validated_data: dict) -> tuple[SelfAssessment, bool]:
+        goal = validated_data['goal']
+        fields = {
+            'achieved_results': validated_data['achieved_results'],
+            'personal_contribution': validated_data['personal_contribution'],
+            'skills_acquired': validated_data['skills_acquired'],
+            'improvements_needed': validated_data['improvements_needed'],
+            'collaboration_quality': validated_data['collaboration_quality'],
+            'satisfaction_score': validated_data['satisfaction_score'],
+        }
+        total_score = self._calculate_total_score(
+            fields['collaboration_quality'],
+            fields['satisfaction_score'],
+        )
+        fields['calculated_score'] = total_score
+
+        with transaction.atomic():
+            instance = (
+                SelfAssessment.objects.select_for_update()
+                .filter(employee=employee, goal=goal)
+                .first()
+            )
+            if instance:
+                for attr, value in fields.items():
+                    setattr(instance, attr, value)
+                instance.goal = goal
+                instance.save(update_fields=list(fields.keys()))
+                created = False
+            else:
+                instance = SelfAssessment.objects.create(
+                    employee=employee,
+                    goal=goal,
+                    **fields,
+                )
+                created = True
+
+        return instance, created
+
     def get_queryset(self):
         user = self.request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
@@ -672,22 +773,26 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         except Employee.DoesNotExist:
             return Response([], status=status.HTTP_200_OK)
     
-    def perform_create(self, serializer):
-        user = self.request.user
-        employee = Employee.objects.filter(user=user).first()
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        employee = self._request_employee()
         if not employee:
             raise ValidationError({'detail': 'Профиль сотрудника не найден.'})
 
         goal = serializer.validated_data.get('goal')
         if goal and not goal.participants.filter(pk=employee.pk).exists():
             raise ValidationError({'detail': 'Вы не участвуете в этой цели.'})
-        
-        data = serializer.validated_data
-        collaboration_score = min(data['collaboration_quality'] // 4, 3)  # 0-10 -> 0-3
-        satisfaction_score = min(data['satisfaction_score'] // 5, 2)  # 0-10 -> 0-2
-        
-        total_score = collaboration_score + satisfaction_score
-        serializer.save(employee=employee, calculated_score=total_score)
+
+        instance, created = self._upsert_self_assessment(employee=employee, validated_data=serializer.validated_data)
+        output = self.get_serializer(instance)
+        headers = self.get_success_headers(output.data)
+        return Response(
+            output.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            headers=headers,
+        )
 
     def perform_update(self, serializer):
         data = serializer.validated_data
@@ -696,10 +801,7 @@ class SelfAssessmentViewSet(viewsets.ModelViewSet):
         collaboration_raw = data.get('collaboration_quality', instance.collaboration_quality)
         satisfaction_raw = data.get('satisfaction_score', instance.satisfaction_score)
 
-        collaboration_score = min(collaboration_raw // 4, 3)
-        satisfaction_score = min(satisfaction_raw // 5, 2)
-
-        total_score = collaboration_score + satisfaction_score
+        total_score = self._calculate_total_score(collaboration_raw, satisfaction_raw)
         serializer.save(calculated_score=total_score)
 
 class Feedback360ViewSet(viewsets.ModelViewSet):

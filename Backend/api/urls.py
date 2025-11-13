@@ -4,6 +4,7 @@ from . import views
 from . import auth_views
 
 router = DefaultRouter()
+router.register(r'organizations', views.OrganizationViewSet, basename='organization')
 router.register(r'departments', views.DepartmentViewSet, basename='department')
 router.register(r'teams', views.TeamViewSet, basename='team')
 router.register(r'employees', views.EmployeeViewSet, basename='employee')

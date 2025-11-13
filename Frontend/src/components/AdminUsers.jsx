@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
+  FiBriefcase,
   FiCopy,
-  FiInfo,
+  FiLock,
+  FiMail,
+  FiMapPin,
   FiPlus,
   FiRefreshCw,
   FiSearch,
@@ -14,353 +17,394 @@ import {
 import {
   adminCreateEmployee,
   deleteEmployee,
-  getAllEmployees,
-  getDepartments,
   getEmployee,
+  listDepartments,
+  listEmployees,
+  listOrganizations,
+  listTeams,
   resetEmployeePassword,
   updateEmployee,
 } from '../api/services';
+import useInfinitePagination from '../hooks/useInfinitePagination';
+import useDebouncedValue from '../hooks/useDebouncedValue';
 import { useAuth } from '../contexts/AuthContext';
 import './AdminUsers.css';
 
-const ROLE_OPTIONS = [
-  { value: 'employee', label: 'Сотрудник' },
-  { value: 'manager', label: 'Менеджер' },
-  { value: 'business_partner', label: 'Бизнес-партнер' },
+const ROLE_FILTER_OPTIONS = [
+  { label: 'Все роли', value: '' },
+  { label: 'Сотрудник', value: 'employee' },
+  { label: 'Менеджер', value: 'manager' },
+  { label: 'Бизнес-партнёр', value: 'business_partner' },
+  { label: 'Администратор', value: 'admin' },
 ];
 
-const createEmptyEmployeeForm = () => ({
-  id: null,
+const ROLE_SELECT_OPTIONS = [
+  { label: 'Сотрудник', value: 'employee' },
+  { label: 'Менеджер', value: 'manager' },
+  { label: 'Бизнес-партнёр', value: 'business_partner' },
+];
+
+const ROLE_BADGES = {
+  admin: 'Администратор',
+  manager: 'Руководитель',
+  business_partner: 'HR-партнёр',
+};
+
+const extractResults = (payload) => {
+  const data = payload?.data ?? payload ?? {};
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.data?.results)) {
+    return data.data.results;
+  }
+  return data?.results || [];
+};
+
+const createInitialForm = () => ({
   first_name: '',
   last_name: '',
   email: '',
   username: '',
+  hire_date: '',
+  organization: '',
   department: '',
   position: '',
-  hire_date: '',
+  team: '',
   role: 'employee',
   is_superuser: false,
   is_staff: false,
 });
 
+const buildEditForm = (employee) => ({
+  id: employee.id,
+  first_name: employee.user?.first_name || '',
+  last_name: employee.user?.last_name || '',
+  email: employee.user?.email || '',
+  username: employee.user?.username || '',
+  hire_date: employee.hire_date || '',
+  department: employee.department?.id ? String(employee.department.id) : '',
+  position: employee.position?.id ? String(employee.position.id) : '',
+  team: employee.team?.id ? String(employee.team.id) : '',
+  role: employee.role || 'employee',
+  is_superuser: Boolean(employee.user?.is_superuser),
+  is_staff: Boolean(employee.user?.is_staff),
+});
+
+const formatEmployeeSubtitle = (employee) => {
+  const position = employee.position_name || employee.position_title || '—';
+  const department = employee.department_name || 'Без отдела';
+  return `${position} • ${department}`;
+};
+
 function AdminUsers() {
   const { user } = useAuth();
   const isAdmin = Boolean(user?.is_superuser);
 
-  const [employees, setEmployees] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [createForm, setCreateForm] = useState(createEmptyEmployeeForm());
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(null);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [passwordInfo, setPasswordInfo] = useState(null);
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const [selectedOrganization, setSelectedOrganization] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
+
+  const {
+    items: employees,
+    count,
+    error: listError,
+    loading: listLoading,
+    hasMore,
+    loadMore,
+    reload,
+    setParams,
+  } = useInfinitePagination(listEmployees, {
+    initialParams: { ordering: 'user__last_name' },
+  });
+
+  const [hierarchyLoading, setHierarchyLoading] = useState(true);
+  const [hierarchyError, setHierarchyError] = useState('');
+  const [organizations, setOrganizations] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [teams, setTeams] = useState([]);
+
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(createInitialForm());
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [credentialsNotice, setCredentialsNotice] = useState(null);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
   const [editForm, setEditForm] = useState(null);
-  const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
+  const [passwordInfo, setPasswordInfo] = useState(null);
 
-  const loadEmployees = async () => {
-    setLoading(true);
-    try {
-      const [employeesList, departmentsRes] = await Promise.all([
-        getAllEmployees({ ordering: 'user__last_name' }),
-        getDepartments(),
-      ]);
-
-      const departmentsData = Array.isArray(departmentsRes.data?.results)
-        ? departmentsRes.data.results
-        : departmentsRes.data;
-
-      setEmployees(employeesList || []);
-      setDepartments(departmentsData || []);
-      setError('');
-    } catch (err) {
-      console.error('Не удалось получить сотрудников', err);
-      setError('Не удалось загрузить список сотрудников. Попробуйте позже.');
-      setEmployees([]);
-    } finally {
-      setLoading(false);
+  const observerRef = useRef(null);
+  const sentinelRef = useCallback((node) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
     }
-  };
+    if (!node) {
+      return;
+    }
+    observerRef.current = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && hasMore && !listLoading) {
+        loadMore();
+      }
+    }, { rootMargin: '160px' });
+    observerRef.current.observe(node);
+  }, [hasMore, listLoading, loadMore]);
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
 
   useEffect(() => {
-    if (isAdmin) {
-      loadEmployees();
+    let cancelled = false;
+    async function loadHierarchy() {
+      setHierarchyLoading(true);
+      setHierarchyError('');
+      try {
+        const [orgRes, deptRes, teamRes] = await Promise.all([
+          listOrganizations({ params: { page_size: 200, ordering: 'name' } }),
+          listDepartments({ params: { page_size: 500, ordering: 'name' } }),
+          listTeams({ params: { page_size: 500, ordering: 'name' } }),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setOrganizations(extractResults(orgRes));
+        setDepartments(extractResults(deptRes));
+        setTeams(extractResults(teamRes));
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Не удалось загрузить справочники для админ-панели', err);
+          setHierarchyError('Не удалось загрузить справочники.');
+        }
+      } finally {
+        if (!cancelled) {
+          setHierarchyLoading(false);
+        }
+      }
     }
-  }, [isAdmin]);
+    loadHierarchy();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedDepartment('');
+  }, [selectedOrganization]);
+
+  useEffect(() => {
+    setParams(() => ({
+      ordering: 'user__last_name',
+      search: debouncedSearch || undefined,
+      department: selectedDepartment || undefined,
+      role: selectedRole || undefined,
+      'department__organization': selectedOrganization || undefined,
+    }));
+  }, [debouncedSearch, selectedDepartment, selectedRole, selectedOrganization, setParams]);
 
   const positionsByDepartment = useMemo(() => {
-    const map = new Map();
-    departments.forEach((department) => {
-      map.set(
-        String(department.id),
-        [...(department.positions || [])].sort(
-          (a, b) => (a.importance ?? 0) - (b.importance ?? 0)
-        )
-      );
-    });
-    return map;
+    return departments.reduce((map, dept) => {
+      map.set(String(dept.id), Array.isArray(dept.positions) ? dept.positions : []);
+      return map;
+    }, new Map());
   }, [departments]);
 
-  const positionsForCreate = useMemo(() => {
-    if (!createForm.department) {
-      return [];
+  const teamsByDepartment = useMemo(() => {
+    return teams.reduce((map, team) => {
+      const key = team.department ? String(team.department) : '';
+      if (!key) {
+        return map;
+      }
+      const existing = map.get(key) || [];
+      existing.push(team);
+      map.set(key, existing);
+      return map;
+    }, new Map());
+  }, [teams]);
+
+  const availableDepartments = useMemo(() => {
+    if (!selectedOrganization) {
+      return departments;
     }
-    return positionsByDepartment.get(String(createForm.department)) || [];
-  }, [positionsByDepartment, createForm.department]);
+    return departments.filter((dept) => String(dept.organization) === String(selectedOrganization));
+  }, [departments, selectedOrganization]);
 
-  const positionsForEdit = useMemo(() => {
-    if (!editForm?.department) {
-      return [];
-    }
-    return positionsByDepartment.get(String(editForm.department)) || [];
-  }, [positionsByDepartment, editForm?.department]);
+  const departmentOptions = useMemo(() => departments.map((dept) => ({
+    value: String(dept.id),
+    label: dept.name,
+    organization: dept.organization ? String(dept.organization) : '',
+  })), [departments]);
 
-  const handleCreateInputChange = (event) => {
-    const { name, value, type, checked } = event.target;
-    setCreateForm((prev) => {
-      let nextValue = type === 'checkbox' ? checked : value;
+  const organizationOptions = useMemo(() => organizations.map((org) => ({
+    value: String(org.id),
+    label: org.name,
+  })), [organizations]);
 
-      if (name === 'department') {
-        return {
-          ...prev,
-          department: nextValue,
-          position: '',
-        };
-      }
-
-      if (name === 'role' && prev.is_superuser) {
-        return prev;
-      }
-
-      if (name === 'is_superuser') {
-        const isSuper = Boolean(nextValue);
-        return {
-          ...prev,
-          is_superuser: isSuper,
-          is_staff: isSuper ? true : prev.is_staff,
-          role: isSuper ? 'admin' : prev.role === 'admin' ? 'employee' : prev.role,
-        };
-      }
-
-      if (name === 'is_staff' && prev.is_superuser) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [name]: nextValue,
-      };
-    });
-  };
-
-  const handleEditInputChange = (event) => {
-    const { name, value, type, checked } = event.target;
-    setEditForm((prev) => {
-      if (!prev) {
-        return prev;
-      }
-
-      let nextValue = type === 'checkbox' ? checked : value;
-
-      if (name === 'department') {
-        return {
-          ...prev,
-          department: nextValue,
-          position: '',
-        };
-      }
-
-      if (name === 'role' && prev.is_superuser) {
-        return prev;
-      }
-
-      if (name === 'is_superuser') {
-        const isSuper = Boolean(nextValue);
-        return {
-          ...prev,
-          is_superuser: isSuper,
-          is_staff: isSuper ? true : prev.is_staff,
-          role: isSuper ? 'admin' : prev.role === 'admin' ? 'employee' : prev.role,
-        };
-      }
-
-      if (name === 'is_staff' && prev.is_superuser) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [name]: nextValue,
-      };
-    });
-  };
+  const totalLoadedManagers = useMemo(() => employees.filter((item) => item.is_manager).length, [employees]);
 
   const openCreateModal = () => {
-    setShowCreateModal(true);
-    setError('');
-    setCreateForm(createEmptyEmployeeForm());
+    setCreateForm(createInitialForm());
+    setCreateError('');
+    setCredentialsNotice(null);
+    setCreateModalOpen(true);
   };
 
   const closeCreateModal = () => {
-    setShowCreateModal(false);
-    setCreateForm(createEmptyEmployeeForm());
+    setCreateModalOpen(false);
   };
 
-  const handleSubmit = async (event) => {
+  const handleCreateInputChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    const nextValue = type === 'checkbox' ? checked : value;
+    setCreateForm((prev) => {
+      if (name === 'organization') {
+        return {
+          ...prev,
+          organization: nextValue,
+          department: '',
+          position: '',
+          team: '',
+        };
+      }
+      if (name === 'department') {
+        return {
+          ...prev,
+          department: nextValue,
+          position: '',
+          team: '',
+        };
+      }
+      if (name === 'is_superuser') {
+        const isSuper = Boolean(nextValue);
+        return {
+          ...prev,
+          is_superuser: isSuper,
+          is_staff: isSuper ? true : prev.is_staff,
+          role: isSuper ? 'admin' : prev.role === 'admin' ? 'employee' : prev.role,
+        };
+      }
+      if (name === 'is_staff' && createForm.is_superuser) {
+        return prev;
+      }
+      if (name === 'role' && createForm.is_superuser) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [name]: nextValue,
+      };
+    });
+  };
+
+  const handleCreateSubmit = async (event) => {
     event.preventDefault();
-    setError('');
-    setSuccess(null);
-    setCreating(true);
-
+    setCreateLoading(true);
+    setCreateError('');
+    setCredentialsNotice(null);
     try {
-      if (!createForm.department) {
-        setError('Выберите отдел для сотрудника.');
-        setCreating(false);
-        return;
-      }
-
-      if (!createForm.position) {
-        setError('Выберите должность для сотрудника.');
-        setCreating(false);
-        return;
-      }
-
-      const finalRole = createForm.is_superuser ? 'admin' : createForm.role;
       const payload = {
         first_name: createForm.first_name,
         last_name: createForm.last_name,
         email: createForm.email,
         username: createForm.username,
+        hire_date: createForm.hire_date || undefined,
         department: createForm.department ? Number(createForm.department) : undefined,
         position: createForm.position ? Number(createForm.position) : undefined,
-        hire_date: createForm.hire_date || undefined,
-        role: finalRole,
+        team: createForm.team ? Number(createForm.team) : undefined,
+        role: createForm.is_superuser ? 'admin' : createForm.role,
         is_superuser: createForm.is_superuser,
         is_staff: createForm.is_superuser ? true : createForm.is_staff,
-        is_manager: finalRole === 'manager',
+        is_manager: createForm.role === 'manager',
       };
-
-      if (!payload.department) {
-        delete payload.department;
-      }
-      if (!payload.position) {
-        delete payload.position;
-      }
-      if (!payload.hire_date) {
-        delete payload.hire_date;
-      }
-      if (!payload.username) {
-        delete payload.username;
-      }
-
       const response = await adminCreateEmployee(payload);
-      setSuccess({
+      setCredentialsNotice({
         username: response.data.user.username,
         password: response.data.temporary_password,
         copied: false,
       });
-
       closeCreateModal();
-      await loadEmployees();
+      await reload();
     } catch (err) {
-      const message =
-        err.response?.data?.error ||
-        err.response?.data?.detail ||
-        err.response?.data?.email?.[0] ||
-        'Не удалось создать учетную запись. Проверьте данные.';
-      setError(message);
+      const message = err.response?.data?.error || err.response?.data?.detail || 'Не удалось создать сотрудника.';
+      setCreateError(message);
     } finally {
-      setCreating(false);
+      setCreateLoading(false);
     }
   };
 
-  const totalManagers = useMemo(
-    () => employees.filter((item) => item.is_manager).length,
-    [employees]
-  );
-
-  const totalStaff = useMemo(
-    () => employees.filter((item) => item.user_is_staff).length,
-    [employees]
-  );
-
-  const filteredEmployees = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return employees;
-    }
-
-    return employees.filter((employee) => {
-      const fullName = employee.full_name?.toLowerCase() || '';
-      const email = employee.email?.toLowerCase() || '';
-      const username = employee.username?.toLowerCase() || '';
-      const department = employee.department_name?.toLowerCase() || '';
-      const position = (
-        employee.position_name ||
-        employee.position_title ||
-        ''
-      ).toLowerCase();
-
-      return [fullName, email, username, department, position].some((value) =>
-        value.includes(query)
-      );
-    });
-  }, [employees, search]);
-
-  const buildEditForm = (detail) => ({
-    id: detail.id,
-    first_name: detail.user?.first_name || '',
-    last_name: detail.user?.last_name || '',
-    email: detail.user?.email || '',
-    username: detail.user?.username || '',
-    department: detail.department?.id ? String(detail.department.id) : '',
-    position: detail.position?.id ? String(detail.position.id) : '',
-    hire_date: detail.hire_date || '',
-    role: detail.role || (detail.user?.is_superuser ? 'admin' : 'employee'),
-    is_superuser: Boolean(detail.user?.is_superuser),
-    is_staff: Boolean(detail.user?.is_staff),
-  });
-
-  const fetchEmployeeDetail = async (employeeId) => {
-    setEditLoading(true);
-    setEditError('');
+  const openDrawer = useCallback(async (employeeId) => {
+    setDrawerOpen(true);
+    setDetail(null);
+    setEditForm(null);
+    setPasswordInfo(null);
+    setDetailError('');
+    setEditSuccess('');
+    setDetailLoading(true);
     try {
       const response = await getEmployee(employeeId);
+      setDetail(response.data);
       setEditForm(buildEditForm(response.data));
-      return true;
     } catch (err) {
       console.error('Не удалось загрузить данные сотрудника', err);
-      setEditError('Не удалось загрузить данные сотрудника. Попробуйте позже.');
-      setEditForm(null);
-      return false;
+      setDetailError('Не удалось загрузить данные сотрудника.');
     } finally {
-      setEditLoading(false);
+      setDetailLoading(false);
     }
+  }, []);
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setDetail(null);
+    setEditForm(null);
+    setDetailError('');
+    setEditSuccess('');
+    setPasswordInfo(null);
   };
 
-  const openEmployeeModal = (employee) => {
-    setSelectedEmployee(employee);
-    setPasswordInfo(null);
-    setEditForm(null);
-    setEditSuccess('');
-    setShowEmployeeModal(true);
-    fetchEmployeeDetail(employee.id);
-  };
-
-  const closeEmployeeModal = () => {
-    setShowEmployeeModal(false);
-    setSelectedEmployee(null);
-    setPasswordInfo(null);
-    setEditForm(null);
-    setEditSuccess('');
-    setEditError('');
+  const handleEditInputChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    const nextValue = type === 'checkbox' ? checked : value;
+    setEditForm((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      if (name === 'department') {
+        return {
+          ...prev,
+          department: nextValue,
+          position: '',
+          team: '',
+        };
+      }
+      if (name === 'is_superuser') {
+        const isSuper = Boolean(nextValue);
+        return {
+          ...prev,
+          is_superuser: isSuper,
+          is_staff: isSuper ? true : prev.is_staff,
+          role: isSuper ? 'admin' : prev.role === 'admin' ? 'employee' : prev.role,
+        };
+      }
+      if (name === 'is_staff' && prev.is_superuser) {
+        return prev;
+      }
+      if (name === 'role' && prev.is_superuser) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [name]: nextValue,
+      };
+    });
   };
 
   const handleEditSubmit = async (event) => {
@@ -368,108 +412,79 @@ function AdminUsers() {
     if (!editForm?.id) {
       return;
     }
-
-  setEditSaving(true);
-  setEditError('');
-  setEditSuccess('');
-
+    setEditSaving(true);
+    setEditSuccess('');
+    setDetailError('');
     try {
-      const finalRole = editForm.is_superuser ? 'admin' : editForm.role;
       const payload = {
         first_name: editForm.first_name,
         last_name: editForm.last_name,
         email: editForm.email,
         username: editForm.username,
+        hire_date: editForm.hire_date || undefined,
         department: editForm.department ? Number(editForm.department) : undefined,
         position: editForm.position ? Number(editForm.position) : undefined,
-        hire_date: editForm.hire_date || undefined,
-        role: finalRole,
+        team: editForm.team ? Number(editForm.team) : undefined,
+        role: editForm.is_superuser ? 'admin' : editForm.role,
         is_superuser: editForm.is_superuser,
         is_staff: editForm.is_superuser ? true : editForm.is_staff,
-        is_manager: finalRole === 'manager',
+        is_manager: editForm.role === 'manager',
       };
-
-      if (!payload.department) {
-        delete payload.department;
-      }
-      if (!payload.position) {
-        delete payload.position;
-      }
-      if (!payload.hire_date) {
-        delete payload.hire_date;
-      }
-      if (!payload.username) {
-        delete payload.username;
-      }
-
-      const response = await updateEmployee(editForm.id, payload);
-      await loadEmployees();
-      if (response?.data) {
-        setSelectedEmployee(response.data);
-      }
-      const detailLoaded = await fetchEmployeeDetail(editForm.id);
-      if (detailLoaded) {
-        setEditSuccess('Данные сотрудника обновлены.');
-      }
+      await updateEmployee(editForm.id, payload);
+      setEditSuccess('Изменения сохранены.');
+      await reload();
+      await openDrawer(editForm.id);
     } catch (err) {
-      console.error('Не удалось обновить сотрудника', err);
-      const message =
-        err.response?.data?.error ||
-        err.response?.data?.detail ||
-        err.response?.data?.email?.[0] ||
-        'Не удалось обновить сотрудника.';
-      setEditError(message);
+      const message = err.response?.data?.detail || 'Не удалось сохранить изменения.';
+      setDetailError(message);
     } finally {
       setEditSaving(false);
     }
   };
 
-  const handleResetPassword = async (employee) => {
-    try {
-      const response = await resetEmployeePassword(employee.id);
-      const details = {
-        username: response.data.username,
-        password: response.data.temporary_password,
-        copied: false,
-      };
-      setPasswordInfo(details);
-      setSuccess(details);
-      await loadEmployees();
-    } catch (err) {
-      console.error('Не удалось сбросить пароль', err);
-      setError('Не удалось обновить пароль сотрудника.');
-    }
-  };
-
-  const handleDeleteEmployee = async (employee) => {
-    const confirmed = window.confirm(
-      'Удалить сотрудника и его доступ? Действие необратимо.'
-    );
-    if (!confirmed) {
+  const handleDeleteEmployee = async () => {
+    if (!editForm?.id) {
       return;
     }
-
+    if (!window.confirm('Удалить сотрудника? Действие необратимо.')) {
+      return;
+    }
     try {
-      await deleteEmployee(employee.id);
-      closeEmployeeModal();
-      await loadEmployees();
+      await deleteEmployee(editForm.id);
+      closeDrawer();
+      await reload();
     } catch (err) {
       console.error('Не удалось удалить сотрудника', err);
-      setError('Удаление сотрудника не удалось.');
+      setDetailError('Не удалось удалить сотрудника.');
     }
   };
 
-  const handleCopyPassword = async (passwordState, updateState) => {
-    if (!passwordState?.password) {
+  const handleResetPassword = async () => {
+    if (!editForm?.id) {
       return;
     }
-
     try {
-      await navigator.clipboard.writeText(passwordState.password);
-      updateState((prev) => (prev ? { ...prev, copied: true } : null));
-      setTimeout(() => updateState((prev) => (prev ? { ...prev, copied: false } : null)), 2000);
-    } catch (copyError) {
-      console.error('Не удалось скопировать пароль', copyError);
+      const response = await resetEmployeePassword(editForm.id);
+      setPasswordInfo(response.data);
+    } catch (err) {
+      console.error('Не удалось сгенерировать пароль', err);
+      setDetailError('Не удалось сгенерировать пароль.');
+    }
+  };
+
+  const handleCopyCredentials = async () => {
+    if (!credentialsNotice?.password) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(credentialsNotice.password);
+      setCredentialsNotice((prev) => (prev ? { ...prev, copied: true } : prev));
+      setTimeout(() => {
+        setCredentialsNotice((prev) => (prev ? { ...prev, copied: false } : prev));
+      }, 2000);
+    } catch (err) {
+      console.error('Не удалось скопировать сгенерированный пароль', err);
+      setCredentialsNotice((prev) => (prev ? { ...prev, copyError: true } : prev));
     }
   };
 
@@ -478,512 +493,488 @@ function AdminUsers() {
   }
 
   return (
-    <div className="page admin-page">
-      <header className="page-header">
+    <div className="admin-users-page">
+      <header className="admin-users-header">
         <div>
-          <p className="page-overline">
-            <FiShield size={14} /> Панель администратора
-          </p>
-          <h1>Управление учетными записями</h1>
+          <p className="page-overline"><FiUsers size={14} /> Управление сотрудниками</p>
+          <h1>Сотрудники организации</h1>
           <p className="page-subtitle">
-            Создавайте рабочие профили, обновляйте доступ и следите за статусами сотрудников
+            Управляйте учетными записями, иерархией и доступами сотрудников. Список загружается по мере прокрутки.
           </p>
         </div>
-        <div className="page-actions">
-          <div className="input-with-icon">
-            <FiSearch size={16} />
-            <input
-              type="search"
-              placeholder="Поиск по имени, почте или отделу"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <button type="button" className="btn ghost" onClick={loadEmployees} disabled={loading}>
+        <div className="header-actions">
+          <button type="button" className="ghost" onClick={reload} disabled={listLoading}>
             <FiRefreshCw size={16} /> Обновить
           </button>
-          <Link to="/admin/departments" className="btn secondary">
-            Управление отделами
-          </Link>
-          <button type="button" className="btn primary" onClick={openCreateModal}>
+          <button type="button" className="primary" onClick={openCreateModal}>
             <FiPlus size={16} /> Новый сотрудник
           </button>
         </div>
       </header>
 
-      {error && <div className="page-banner error">{error}</div>}
-
-      {success && success.password && (
+      {credentialsNotice && (
         <div className="page-banner success">
-          <FiInfo size={16} /> Учётная запись <strong>{success.username}</strong> обновлена. Временный пароль:
-          <span className="password-chip">{success.password}</span>
-          <button
-            type="button"
-            className="btn inline"
-            onClick={() => handleCopyPassword(success, setSuccess)}
-          >
-            <FiCopy size={16} /> {success.copied ? 'Скопировано' : 'Скопировать'}
+          <span>
+            Учётная запись <strong>{credentialsNotice.username}</strong> создана. Пароль:
+            {' '}
+            <code>{credentialsNotice.password}</code>
+          </span>
+          <button type="button" className="ghost" onClick={handleCopyCredentials}>
+            <FiCopy size={15} /> {credentialsNotice.copied ? 'Скопировано' : 'Скопировать'}
           </button>
+          {credentialsNotice.copyError && (
+            <span className="banner-hint">Не удалось скопировать автоматически, используйте ручной ввод.</span>
+          )}
         </div>
       )}
 
-      <section className="panel">
-        <header className="panel-header">
-          <div>
-            <p className="panel-overline">Текущие учетные записи</p>
-            <h2>Сотрудники компании</h2>
-          </div>
-          <div className="panel-badges">
-            <span className="badge">
-              <FiUsers size={14} /> Всего: {employees.length}
-            </span>
-            <span className="badge">Менеджеры: {totalManagers}</span>
-            <span className="badge">Администрирование: {totalStaff}</span>
-          </div>
-        </header>
-
-        <div className="table-wrapper">
-          {loading ? (
-            <div className="table-placeholder">Загружаем сотрудников…</div>
-          ) : filteredEmployees.length === 0 ? (
-            <div className="table-placeholder empty">
-              {search ? 'По запросу сотрудники не найдены.' : 'Пока нет созданных сотрудников.'}
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Сотрудник</th>
-                  <th>Должность</th>
-                  <th>Отдел</th>
-                  <th>Менеджер</th>
-                  <th>Админ</th>
-                  <th>Дата приема</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEmployees.map((employee) => (
-                  <tr key={employee.id}>
-                    <td>
-                      <div className="table-name">
-                        <strong>{employee.full_name || employee.username}</strong>
-                        <span>{employee.email}</span>
-                      </div>
-                    </td>
-                    <td>{employee.position_name || employee.position_title || '—'}</td>
-                    <td>{employee.department_name || '—'}</td>
-                    <td>
-                      <span className={`status ${employee.is_manager ? 'status-on' : 'status-off'}`}>
-                        {employee.is_manager ? 'Да' : 'Нет'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status ${employee.user_is_staff ? 'status-on' : 'status-off'}`}>
-                        {employee.user_is_staff ? 'Да' : 'Нет'}
-                      </span>
-                    </td>
-                    <td>
-                      {employee.hire_date
-                        ? new Date(employee.hire_date).toLocaleDateString('ru-RU')
-                        : '—'}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn inline"
-                        onClick={() => openEmployeeModal(employee)}
-                      >
-                        Подробнее
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <section className="filters-panel">
+        <div className="input-with-icon">
+          <FiSearch size={16} />
+          <input
+            type="search"
+            placeholder="Поиск по имени, почте или отделу"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+        <div className="filters-grid">
+          <label>
+            <span>Организация</span>
+            <select
+              value={selectedOrganization}
+              onChange={(event) => setSelectedOrganization(event.target.value)}
+            >
+              <option value="">Все организации</option>
+              {organizationOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Отдел</span>
+            <select
+              value={selectedDepartment}
+              onChange={(event) => setSelectedDepartment(event.target.value)}
+              disabled={!availableDepartments.length}
+            >
+              <option value="">Все отделы</option>
+              {availableDepartments.map((dept) => (
+                <option key={dept.id} value={dept.id}>{dept.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Роль</span>
+            <select
+              value={selectedRole}
+              onChange={(event) => setSelectedRole(event.target.value)}
+            >
+              {ROLE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="filters-summary">
+          <span>{typeof count === 'number' ? `${count} сотрудников` : 'Загружаем...'}</span>
+          <span>{totalLoadedManagers} менеджеров в выборке</span>
         </div>
       </section>
 
-      {showCreateModal && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal large">
-            <header className="modal-header">
-              <h2>Новый сотрудник</h2>
-              <button type="button" className="modal-close" onClick={closeCreateModal}>
+      {(listError || hierarchyError) && (
+        <div className="page-banner error">
+          {listError ? 'Не удалось загрузить список сотрудников.' : hierarchyError}
+        </div>
+      )}
+
+      <div className="admin-users-layout">
+        <section className="employees-list">
+          {hierarchyLoading && !employees.length ? (
+            <div className="panel placeholder">Загружаем справочники…</div>
+          ) : employees.length === 0 && !listLoading ? (
+            <div className="panel empty">Сотрудники не найдены.</div>
+          ) : (
+            employees.map((employee) => (
+              <article
+                key={employee.id}
+                className="employee-card"
+                onClick={() => openDrawer(employee.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    openDrawer(employee.id);
+                  }
+                }}
+              >
+                <header>
+                  <div>
+                    <strong>{employee.full_name || employee.username}</strong>
+                    <p>{formatEmployeeSubtitle(employee)}</p>
+                  </div>
+                  <div className="badge-set">
+                    {employee.user_is_superuser && <span className="badge danger">Суперпользователь</span>}
+                    {employee.role && ROLE_BADGES[employee.role] && (
+                      <span className="badge accent">{ROLE_BADGES[employee.role]}</span>
+                    )}
+                    {employee.is_manager && !employee.user_is_superuser && (
+                      <span className="badge success">Руководитель</span>
+                    )}
+                  </div>
+                </header>
+                <footer>
+                  {employee.email && (
+                    <span><FiMail size={14} /> {employee.email}</span>
+                  )}
+                  {employee.team_name ? (
+                    <span><FiUsers size={14} /> {employee.team_name}</span>
+                  ) : (
+                    <span><FiMapPin size={14} /> {employee.department_name || 'Без отдела'}</span>
+                  )}
+                </footer>
+              </article>
+            ))
+          )}
+          <div ref={sentinelRef} className="sentinel" />
+          {listLoading && employees.length > 0 && <div className="list-loader">Подгружаем…</div>}
+        </section>
+
+        {drawerOpen && (
+          <aside className="employee-drawer">
+            <div className="drawer-header">
+              <button type="button" className="icon" onClick={closeDrawer}>
                 <FiX size={18} />
               </button>
-            </header>
-            <form className="modal-body form-grid" onSubmit={handleSubmit}>
-              <label className="form-field">
-                <span>Имя *</span>
-                <input
-                  name="first_name"
-                  value={createForm.first_name}
-                  onChange={handleCreateInputChange}
-                  placeholder="Иван"
-                  required
-                  disabled={creating}
-                />
-              </label>
-              <label className="form-field">
-                <span>Фамилия *</span>
-                <input
-                  name="last_name"
-                  value={createForm.last_name}
-                  onChange={handleCreateInputChange}
-                  placeholder="Иванов"
-                  required
-                  disabled={creating}
-                />
-              </label>
-              <label className="form-field">
-                <span>Электронная почта *</span>
-                <input
-                  type="email"
-                  name="email"
-                  value={createForm.email}
-                  onChange={handleCreateInputChange}
-                  placeholder="user@example.com"
-                  required
-                  disabled={creating}
-                />
-              </label>
-              <label className="form-field">
-                <span>Имя пользователя</span>
-                <input
-                  name="username"
-                  value={createForm.username}
-                  onChange={handleCreateInputChange}
-                  placeholder="(опционально)"
-                  disabled={creating}
-                />
-              </label>
-              <label className="form-field">
-                <span>Отдел *</span>
-                <select
-                  name="department"
-                  value={createForm.department}
-                  onChange={handleCreateInputChange}
-                  required
-                  disabled={creating}
-                >
-                  <option value="">Выберите отдел</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-field">
-                <span>Должность *</span>
-                <select
-                  name="position"
-                  value={createForm.position}
-                  onChange={handleCreateInputChange}
-                  required
-                  disabled={creating || !createForm.department || positionsForCreate.length === 0}
-                >
-                  <option value="">{createForm.department ? 'Выберите должность' : 'Сначала выберите отдел'}</option>
-                  {positionsForCreate.map((position) => (
-                    <option key={position.id} value={position.id}>
-                      {position.title}
-                    </option>
-                  ))}
-                </select>
-                {createForm.department && positionsForCreate.length === 0 && (
-                  <small className="form-hint">
-                    Для отдела ещё не настроены должности. Добавьте их в разделе "Отделы".
-                  </small>
+              <div>
+                <h2>{detail?.user?.get_full_name || detail?.full_name || 'Карточка сотрудника'}</h2>
+                {detail && (
+                  <p>
+                    <FiBriefcase size={14} /> {formatEmployeeSubtitle(detail)}
+                  </p>
                 )}
-              </label>
-              <label className="form-field">
-                <span>Дата приема</span>
-                <input
-                  type="date"
-                  name="hire_date"
-                  value={createForm.hire_date}
-                  onChange={handleCreateInputChange}
-                  disabled={creating}
-                />
-              </label>
-              <label className="form-field">
-                <span>Роль *</span>
-                <select
-                  name="role"
-                  value={createForm.is_superuser ? 'admin' : createForm.role}
-                  onChange={handleCreateInputChange}
-                  disabled={creating || createForm.is_superuser}
-                  required
-                >
-                  {ROLE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                  {createForm.is_superuser && (
-                    <option value="admin">Администратор</option>
+              </div>
+            </div>
+
+            {detailLoading ? (
+              <div className="drawer-placeholder">Загружаем данные сотрудника…</div>
+            ) : detailError ? (
+              <div className="drawer-error">{detailError}</div>
+            ) : detail && editForm ? (
+              <form className="drawer-form" onSubmit={handleEditSubmit}>
+                <div className="form-grid">
+                  <label>
+                    <span>Имя</span>
+                    <input
+                      type="text"
+                      name="first_name"
+                      value={editForm.first_name}
+                      onChange={handleEditInputChange}
+                    />
+                  </label>
+                  <label>
+                    <span>Фамилия</span>
+                    <input
+                      type="text"
+                      name="last_name"
+                      value={editForm.last_name}
+                      onChange={handleEditInputChange}
+                    />
+                  </label>
+                  <label>
+                    <span>Почта</span>
+                    <input
+                      type="email"
+                      name="email"
+                      value={editForm.email}
+                      onChange={handleEditInputChange}
+                    />
+                  </label>
+                  <label>
+                    <span>Имя пользователя</span>
+                    <input
+                      type="text"
+                      name="username"
+                      value={editForm.username}
+                      onChange={handleEditInputChange}
+                    />
+                  </label>
+                  <label>
+                    <span>Дата приема</span>
+                    <input
+                      type="date"
+                      name="hire_date"
+                      value={editForm.hire_date || ''}
+                      onChange={handleEditInputChange}
+                    />
+                  </label>
+                  <label>
+                    <span>Отдел</span>
+                    <select
+                      name="department"
+                      value={editForm.department}
+                      onChange={handleEditInputChange}
+                    >
+                      <option value="">Не назначен</option>
+                      {departmentOptions.map((dept) => (
+                        <option key={dept.value} value={dept.value}>{dept.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Должность</span>
+                    <select
+                      name="position"
+                      value={editForm.position}
+                      onChange={handleEditInputChange}
+                    >
+                      <option value="">Свободная форма</option>
+                      {(positionsByDepartment.get(editForm.department || '') || []).map((position) => (
+                        <option key={position.id} value={position.id}>{position.title}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Команда</span>
+                    <select
+                      name="team"
+                      value={editForm.team}
+                      onChange={handleEditInputChange}
+                    >
+                      <option value="">Без команды</option>
+                      {(teamsByDepartment.get(editForm.department || '') || []).map((team) => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {!editForm.is_superuser && (
+                    <label>
+                      <span>Роль</span>
+                      <select
+                        name="role"
+                        value={editForm.role}
+                        onChange={handleEditInputChange}
+                      >
+                        {ROLE_SELECT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
                   )}
-                </select>
-                {createForm.is_superuser && (
-                  <small className="form-hint">У суперпользователя роль назначается автоматически.</small>
+                </div>
+
+                <div className="form-flags">
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      name="is_superuser"
+                      checked={editForm.is_superuser}
+                      onChange={handleEditInputChange}
+                    />
+                    <span><FiShield size={14} /> Суперпользователь</span>
+                  </label>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      name="is_staff"
+                      checked={editForm.is_superuser ? true : editForm.is_staff}
+                      onChange={handleEditInputChange}
+                      disabled={editForm.is_superuser}
+                    />
+                    <span>Персонал</span>
+                  </label>
+                </div>
+
+                {editSuccess && <div className="drawer-success">{editSuccess}</div>}
+
+                <div className="drawer-actions">
+                  <button type="submit" className="primary" disabled={editSaving}>
+                    {editSaving ? 'Сохраняем…' : 'Сохранить изменения'}
+                  </button>
+                  <button type="button" className="ghost" onClick={handleResetPassword}>
+                    <FiLock size={14} /> Сгенерировать пароль
+                  </button>
+                  <button type="button" className="danger" onClick={handleDeleteEmployee}>
+                    <FiTrash2 size={14} /> Удалить
+                  </button>
+                </div>
+
+                {passwordInfo && (
+                  <div className="password-hint">
+                    <p>Временные данные для входа:</p>
+                    <code>{passwordInfo.username} / {passwordInfo.temporary_password}</code>
+                  </div>
                 )}
-              </label>
-              <div className="form-field checkbox-field span-2">
+              </form>
+            ) : null}
+          </aside>
+        )}
+      </div>
+
+      {createModalOpen && (
+        <div className="modal-backdrop" onClick={closeCreateModal} role="presentation">
+          <div className="modal" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h2>Новый сотрудник</h2>
+              <button type="button" className="icon" onClick={closeCreateModal}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <form className="modal-body" onSubmit={handleCreateSubmit}>
+              <div className="form-grid">
                 <label>
+                  <span>Имя</span>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={createForm.first_name}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Фамилия</span>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={createForm.last_name}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Почта</span>
+                  <input
+                    type="email"
+                    name="email"
+                    value={createForm.email}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Имя пользователя</span>
+                  <input
+                    type="text"
+                    name="username"
+                    value={createForm.username}
+                    onChange={handleCreateInputChange}
+                    placeholder="Создастся автоматически, если оставить пустым"
+                  />
+                </label>
+                <label>
+                  <span>Дата приема</span>
+                  <input
+                    type="date"
+                    name="hire_date"
+                    value={createForm.hire_date}
+                    onChange={handleCreateInputChange}
+                  />
+                </label>
+                <label>
+                  <span>Организация</span>
+                  <select
+                    name="organization"
+                    value={createForm.organization}
+                    onChange={handleCreateInputChange}
+                  >
+                    <option value="">Не выбрана</option>
+                    {organizationOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Отдел</span>
+                  <select
+                    name="department"
+                    value={createForm.department}
+                    onChange={handleCreateInputChange}
+                    required
+                  >
+                    <option value="">Выберите отдел</option>
+                    {departmentOptions
+                      .filter((dept) => !createForm.organization || dept.organization === createForm.organization)
+                      .map((dept) => (
+                        <option key={dept.value} value={dept.value}>{dept.label}</option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Должность</span>
+                  <select
+                    name="position"
+                    value={createForm.position}
+                    onChange={handleCreateInputChange}
+                  >
+                    <option value="">Свободная форма</option>
+                    {(positionsByDepartment.get(createForm.department || '') || []).map((position) => (
+                      <option key={position.id} value={position.id}>{position.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Команда</span>
+                  <select
+                    name="team"
+                    value={createForm.team}
+                    onChange={handleCreateInputChange}
+                  >
+                    <option value="">Без команды</option>
+                    {(teamsByDepartment.get(createForm.department || '') || []).map((team) => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {!createForm.is_superuser && (
+                  <label>
+                    <span>Роль</span>
+                    <select
+                      name="role"
+                      value={createForm.role}
+                      onChange={handleCreateInputChange}
+                    >
+                      {ROLE_SELECT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div className="form-flags">
+                <label className="checkbox">
                   <input
                     type="checkbox"
                     name="is_superuser"
                     checked={createForm.is_superuser}
                     onChange={handleCreateInputChange}
-                    disabled={creating}
                   />
-                  <span>Сделать суперпользователем</span>
+                  <span><FiShield size={14} /> Суперпользователь</span>
                 </label>
-                <label>
+                <label className="checkbox">
                   <input
                     type="checkbox"
                     name="is_staff"
                     checked={createForm.is_superuser ? true : createForm.is_staff}
                     onChange={handleCreateInputChange}
-                    disabled={creating || createForm.is_superuser}
+                    disabled={createForm.is_superuser}
                   />
-                  <span>Открыть доступ к админке</span>
+                  <span>Персонал</span>
                 </label>
               </div>
-              <footer className="modal-footer span-2">
-                <button type="button" className="btn ghost" onClick={closeCreateModal}>
+
+              {createError && <div className="drawer-error">{createError}</div>}
+
+              <div className="modal-actions">
+                <button type="button" className="ghost" onClick={closeCreateModal}>
                   Отмена
                 </button>
-                <button type="submit" className="btn primary" disabled={creating}>
-                  <FiPlus size={16} /> {creating ? 'Создаём…' : 'Создать сотрудника'}
+                <button type="submit" className="primary" disabled={createLoading}>
+                  {createLoading ? 'Создаем…' : 'Создать'}
                 </button>
-              </footer>
+              </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showEmployeeModal && selectedEmployee && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal large">
-            <header className="modal-header">
-              <div>
-                <h2>{editForm?.first_name || editForm?.last_name ? `${editForm?.first_name} ${editForm?.last_name}`.trim() : selectedEmployee.full_name || selectedEmployee.username}</h2>
-                <p className="modal-subtitle">{editForm?.email || selectedEmployee.email}</p>
-              </div>
-              <button type="button" className="modal-close" onClick={closeEmployeeModal}>
-                <FiX size={18} />
-              </button>
-            </header>
-            {editLoading ? (
-              <div className="modal-body loading">Загружаем данные сотрудника…</div>
-            ) : editForm ? (
-              <form className="modal-body form-grid" onSubmit={handleEditSubmit}>
-                <label className="form-field">
-                  <span>Имя *</span>
-                  <input
-                    name="first_name"
-                    value={editForm?.first_name || ''}
-                    onChange={handleEditInputChange}
-                    required
-                    disabled={editSaving}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Фамилия *</span>
-                  <input
-                    name="last_name"
-                    value={editForm?.last_name || ''}
-                    onChange={handleEditInputChange}
-                    required
-                    disabled={editSaving}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Электронная почта *</span>
-                  <input
-                    type="email"
-                    name="email"
-                    value={editForm?.email || ''}
-                    onChange={handleEditInputChange}
-                    required
-                    disabled={editSaving}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Имя пользователя</span>
-                  <input
-                    name="username"
-                    value={editForm?.username || ''}
-                    onChange={handleEditInputChange}
-                    disabled={editSaving}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Отдел</span>
-                  <select
-                    name="department"
-                    value={editForm?.department || ''}
-                    onChange={handleEditInputChange}
-                    disabled={editSaving}
-                  >
-                    <option value="">Не выбран</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-field">
-                  <span>Должность</span>
-                  <select
-                    name="position"
-                    value={editForm?.position || ''}
-                    onChange={handleEditInputChange}
-                    disabled={
-                      editSaving ||
-                      !editForm?.department ||
-                      positionsForEdit.length === 0
-                    }
-                  >
-                    <option value="">{editForm?.department ? 'Выберите должность' : 'Сначала выберите отдел'}</option>
-                    {positionsForEdit.map((position) => (
-                      <option key={position.id} value={position.id}>
-                        {position.title}
-                      </option>
-                    ))}
-                  </select>
-                  {editForm?.department && positionsForEdit.length === 0 && (
-                    <small className="form-hint">
-                      Для отдела ещё не настроены должности. Добавьте их в разделе "Отделы".
-                    </small>
-                  )}
-                </label>
-                <label className="form-field">
-                  <span>Дата приема</span>
-                  <input
-                    type="date"
-                    name="hire_date"
-                    value={editForm?.hire_date || ''}
-                    onChange={handleEditInputChange}
-                    disabled={editSaving}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Роль *</span>
-                  <select
-                    name="role"
-                    value={editForm?.is_superuser ? 'admin' : editForm?.role || 'employee'}
-                    onChange={handleEditInputChange}
-                    disabled={editSaving || editForm?.is_superuser}
-                    required
-                  >
-                    {ROLE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                    {editForm?.is_superuser && (
-                      <option value="admin">Администратор</option>
-                    )}
-                  </select>
-                  {editForm?.is_superuser && (
-                    <small className="form-hint">У суперпользователя роль назначается автоматически.</small>
-                  )}
-                </label>
-                <div className="form-field checkbox-field span-2">
-                  <label>
-                    <input
-                      type="checkbox"
-                      name="is_superuser"
-                      checked={Boolean(editForm?.is_superuser)}
-                      onChange={handleEditInputChange}
-                      disabled={editSaving}
-                    />
-                    <span>Суперпользователь</span>
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      name="is_staff"
-                      checked={editForm?.is_superuser ? true : Boolean(editForm?.is_staff)}
-                      onChange={handleEditInputChange}
-                      disabled={editSaving || editForm?.is_superuser}
-                    />
-                    <span>Доступ к админке</span>
-                  </label>
-                </div>
-
-                {editError && <div className="form-hint error span-2">{editError}</div>}
-                {editSuccess && <div className="form-hint success span-2">{editSuccess}</div>}
-
-                <section className="credentials-card span-2">
-                  <header>
-                    <h3>Доступы сотрудника</h3>
-                    <p>
-                      Пароли хранятся зашифрованными. Сгенерируйте новый временный пароль, чтобы передать его
-                      сотруднику.
-                    </p>
-                  </header>
-                  {passwordInfo?.password ? (
-                    <div className="credentials-row">
-                      <div>
-                        <span>Временный пароль</span>
-                        <strong>{passwordInfo.password}</strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn inline"
-                        onClick={() => handleCopyPassword(passwordInfo, setPasswordInfo)}
-                      >
-                        <FiCopy size={16} /> {passwordInfo.copied ? 'Скопировано' : 'Скопировать'}
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="credentials-hint">Сгенерируйте новый пароль, чтобы отобразить его здесь.</p>
-                  )}
-                </section>
-
-                <footer className="modal-footer span-2">
-                  <button
-                    type="button"
-                    className="btn danger"
-                    onClick={() => handleDeleteEmployee(selectedEmployee)}
-                    disabled={editSaving}
-                  >
-                    <FiTrash2 size={16} /> Удалить сотрудника
-                  </button>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => handleResetPassword(selectedEmployee)}
-                    disabled={editSaving}
-                  >
-                    Сгенерировать новый пароль
-                  </button>
-                  <button type="button" className="btn ghost" onClick={closeEmployeeModal}>
-                    Закрыть
-                  </button>
-                  <button type="submit" className="btn primary" disabled={editSaving}>
-                    {editSaving ? 'Сохраняем…' : 'Сохранить изменения'}
-                  </button>
-                </footer>
-              </form>
-            ) : (
-              <div className="modal-body">
-                <div className="page-banner error">
-                  {editError || 'Не удалось загрузить данные сотрудника. Попробуйте позже.'}
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn ghost" onClick={closeEmployeeModal}>
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
