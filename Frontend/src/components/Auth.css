@@ -133,9 +133,25 @@
   padding: 12px 14px;
   border-radius: 12px;
   font-size: 14px;
-  border: 1px solid rgba(244, 67, 54, 0.45);
+  border: 1px solid transparent;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.auth-banner + .auth-banner {
+  margin-top: 8px;
+}
+
+.auth-banner.error {
+  border-color: rgba(244, 67, 54, 0.45);
   background: rgba(244, 67, 54, 0.16);
   color: var(--color-error);
+}
+
+.auth-banner.notice {
+  border-color: rgba(33, 150, 243, 0.32);
+  background: rgba(33, 150, 243, 0.14);
+  color: var(--color-info);
 }
 
 .auth-form {

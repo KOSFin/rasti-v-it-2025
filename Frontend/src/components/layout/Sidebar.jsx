@@ -15,13 +15,12 @@ import {
   FiUserCheck,
   FiGitBranch,
   FiBookOpen,
-  FiX,
 } from 'react-icons/fi';
 import { getGoals, getTasks, updateTask } from '../../api/services';
 import { useAuth } from '../../contexts/AuthContext';
 import './Sidebar.css';
 
-const Sidebar = ({ isOpen, onClose }) => {
+const Sidebar = () => {
   const { employee, user } = useAuth();
   const [goals, setGoals] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -181,18 +180,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     return sections.filter((section) => section.items.length > 0);
   }, [canSeeNineBox, isAdmin, isManager]);
 
-  const handleLinkClick = () => {
-    if (window.innerWidth <= 768) {
-      onClose?.();
-    }
-  };
-
   return (
-    <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
-      <button className="sidebar-close-btn" onClick={onClose} aria-label="Закрыть меню">
-        <FiX size={24} />
-      </button>
-      
+    <aside className="sidebar">
       <nav className="sidebar-nav">
         {navSections.map((section) => (
           <div key={section.label} className="sidebar-section">
@@ -203,7 +192,6 @@ const Sidebar = ({ isOpen, onClose }) => {
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                  onClick={handleLinkClick}
                 >
                   <item.icon size={18} />
                   <span>{item.label}</span>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { IconBell, IconCheckCircle } from './Icons';
+import useIconFallback from '../../hooks/useIconFallback';
 import './NotificationBell.css';
 
 const NotificationBell = () => {
@@ -9,6 +10,7 @@ const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
+  const [buttonRef, showFallback] = useIconFallback(open, totalUnread);
 
   useEffect(() => {
     if (!open) {
@@ -61,12 +63,15 @@ const NotificationBell = () => {
     <div className="notification-wrapper" ref={wrapperRef}>
       <button
         type="button"
-        className={`notification-button ${open ? 'active' : ''}`}
+        ref={buttonRef}
+        className={`notification-button ${open ? 'active' : ''}${showFallback ? ' fallback' : ''}`}
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Уведомления"
-        title="Уведомления"
       >
-        <IconBell size={18} />
+        <span className="icon-visual" aria-hidden="true">
+          <IconBell size={18} />
+        </span>
+        <span className="icon-emoji" aria-hidden="true">🔔</span>
         {totalUnread > 0 && <span className="notification-badge">{Math.min(totalUnread, 9)}{totalUnread > 9 ? '+' : ''}</span>}
       </button>
 

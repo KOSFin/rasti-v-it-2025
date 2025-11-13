@@ -1,9 +1,8 @@
 .layout {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
 }
 
 .layout-container {
@@ -19,8 +18,8 @@
   padding: 24px;
 }
 
+<<<<<<< HEAD
 .mobile-menu-overlay {
-  display: none;
   position: fixed;
   top: 0;
   left: 0;
@@ -28,9 +27,18 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 95;
-  animation: fadeIn 0.2s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
+.layout.menu-open .mobile-menu-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+=======
+>>>>>>> parent of 847b383 (mobile v!)
 .page {
   max-width: 1200px;
   margin: 0 auto;
@@ -41,18 +49,8 @@
 
 /* Адаптивность */
 @media (max-width: 768px) {
-  .mobile-menu-overlay {
-    display: block;
-  }
-
   .main-content {
-    padding: 16px 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .main-content {
-    padding: 12px 8px;
+    padding: 16px;
   }
 }
 

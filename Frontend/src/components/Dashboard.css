@@ -438,7 +438,7 @@
   padding: 0;
 }
 
-.recommendation-list li {
+.talent-list li {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -465,14 +465,94 @@
   color: var(--text-secondary);
   line-height: 1.45;
 }
-
+.talent-list:not(.risk) .tag {
 .recommendation-list li .priority {
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  align-items: stretch;
+  gap: 14px;
+  flex-direction: column;
+  border-color: rgba(244, 67, 54, 0.18);
+  background: var(--surface-elevated);
   letter-spacing: 0.6px;
+
+.talent-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.talent-meta strong {
+  word-break: break-word;
+}
+
+.talent-meta span {
+  word-break: break-word;
+}
+
+.risk-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.risk-status[data-tone="neutral"] {
+  border-color: var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.risk-status[data-tone="danger"] {
+  border-color: rgba(244, 67, 54, 0.35);
+  background: var(--status-danger-bg);
+}
+
+.risk-status[data-tone="warning"] {
+  border-color: rgba(255, 152, 0, 0.32);
+  background: var(--status-warning-bg);
+}
+
+.risk-status[data-tone="info"] {
+  border-color: rgba(33, 150, 243, 0.28);
+  background: var(--info-surface);
+}
+
+.risk-status[data-tone="success"] {
+  border-color: rgba(76, 175, 80, 0.28);
+  background: var(--success-surface);
+}
+
+.risk-status-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.risk-status[data-tone="danger"] .risk-status-label {
+  color: var(--color-error);
+}
+
+.risk-status[data-tone="warning"] .risk-status-label {
+  color: var(--color-warning);
+}
+
+.risk-status[data-tone="info"] .risk-status-label {
+  color: var(--color-info);
+}
+
+.risk-status[data-tone="success"] .risk-status-label {
+  color: var(--color-success);
+}
+
+.risk-status-hint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
 }
 
 .recommendation-list li .priority.high {
@@ -686,109 +766,24 @@
   border-radius: 14px;
 }
 
-@media (max-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
-
-  .insights-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
-}
-
 @media (max-width: 992px) {
   .hero-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .summary-strip {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
-
-  .insights-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .dashboard-page {
-    gap: 18px;
-  }
-
   .dashboard-hero {
-    padding: 16px;
-    border-radius: 18px;
-  }
-
-  .hero-top {
-    gap: 16px;
-  }
-
-  .filters {
-    width: 100%;
-    gap: 10px;
-  }
-
-  .filter-group {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .filters select {
-    width: 100%;
-    min-width: auto;
+    padding: 20px;
   }
 
   .hero-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .hero-metrics div {
-    padding: 12px;
-  }
-
-  .metric-label {
-    font-size: 11px;
-  }
-
-  .metric-value {
-    font-size: 20px;
-  }
-
-  .metric-hint {
-    font-size: 11px;
-  }
-
-  .summary-strip {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .summary-card {
-    padding: 14px;
-  }
-
-  .summary-main {
-    font-size: 20px;
-  }
-
-  .insights-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .insight-card {
-    padding: 14px 16px;
-  }
-
-  .insight-number {
-    font-size: 24px;
   }
 
   .dashboard-grid {
     grid-template-columns: minmax(0, 1fr);
+<<<<<<< HEAD
     gap: 16px;
   }
 
@@ -812,6 +807,10 @@
 
   .recommendation-list li {
     padding: 12px 14px;
+  }
+
+  .risk-status {
+    padding: 12px;
   }
 }
 
@@ -848,6 +847,8 @@
   .filter {
     padding: 6px 12px;
     font-size: 13px;
+=======
+>>>>>>> parent of 847b383 (mobile v!)
   }
 }
 

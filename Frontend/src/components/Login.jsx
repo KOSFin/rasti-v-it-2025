@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FiLogIn, FiLock, FiMoon, FiShield, FiSun, FiUser } from 'react-icons/fi';
 import { login } from '../api/services';
 import { useTheme } from '../contexts/ThemeContext';
@@ -8,11 +8,13 @@ import './Auth.css';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { refreshProfile } = useAuth();
   const [formState, setFormState] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [prefillNotice, setPrefillNotice] = useState('');
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -37,6 +39,24 @@ function Login() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const loginFromUrl = searchParams.get('lgn') || searchParams.get('login') || '';
+    const passwordFromUrl = searchParams.get('psw') || searchParams.get('pwd') || '';
+
+    if (!loginFromUrl && !passwordFromUrl) {
+      setPrefillNotice('');
+      return;
+    }
+
+    setFormState((prev) => ({
+      username: loginFromUrl || prev.username,
+      password: passwordFromUrl || prev.password,
+    }));
+
+    setPrefillNotice('Данные для входа подставлены из ссылки. Проверьте их и нажмите «Войти».');
+  }, [location.search]);
 
   return (
     <div className="auth-page">
@@ -63,6 +83,7 @@ function Login() {
             </div>
           </header>
 
+          {prefillNotice && <div className="auth-banner notice">{prefillNotice}</div>}
           {error && <div className="auth-banner error">{error}</div>}
 
           <form className="auth-form" onSubmit={handleSubmit}>

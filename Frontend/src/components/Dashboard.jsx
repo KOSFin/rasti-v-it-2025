@@ -655,15 +655,21 @@ function AdminDashboard({ user }) {
             <div className="empty">Рисковых сотрудников не обнаружено.</div>
           ) : (
             <ul className="talent-list risk">
-              {attentionList.map((entry) => (
-                <li key={`risk-${entry.employee_id}`}>
-                  <div>
-                    <strong>{entry.employee_name}</strong>
-                    <span>{entry.position || '—'}</span>
-                  </div>
-                  <span className="tag warning">{statusByQuadrant(entry)}</span>
-                </li>
-              ))}
+              {attentionList.map((entry) => {
+                const riskStatus = statusByQuadrant(entry);
+                return (
+                  <li key={`risk-${entry.employee_id}`} className="risk-item">
+                    <div className="talent-meta">
+                      <strong>{entry.employee_name}</strong>
+                      <span>{entry.position || '—'}</span>
+                    </div>
+                    <div className="risk-status" data-tone={riskStatus.tone}>
+                      <span className="risk-status-label">{riskStatus.label}</span>
+                      {riskStatus.hint && <span className="risk-status-hint">{riskStatus.hint}</span>}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -816,21 +822,45 @@ function statusByQuadrant(entry) {
   const y = clampNineBox(entry?.nine_box_y);
 
   if (x === 2 && y === 2) {
-    return 'Звезда';
+    return {
+      tone: 'success',
+      label: 'Звезда',
+      hint: 'Высокий потенциал и стабильная результативность.',
+    };
   }
   if (y === 2 || x === 2) {
-    return 'Готов к росту';
+    return {
+      tone: 'info',
+      label: 'Готов к росту',
+      hint: 'Рассмотрите повышение ответственности или новый проект.',
+    };
   }
   if (x === 0 && y === 0) {
-    return 'Низкий потенциал и результативность';
+    return {
+      tone: 'danger',
+      label: 'Низкий потенциал и результативность',
+      hint: 'Требуется антикризисный план и плотный контроль прогресса.',
+    };
   }
   if (x === 0) {
-    return 'Низкая результативность';
+    return {
+      tone: 'warning',
+      label: 'Низкая результативность',
+      hint: 'Сфокусируйтесь на приоритетах и уберите блокеры.',
+    };
   }
   if (y === 0) {
-    return 'Низкий потенциал';
+    return {
+      tone: 'warning',
+      label: 'Низкий потенциал',
+      hint: 'Назначьте наставника и подберите программы развития.',
+    };
   }
-  return 'Стабильная зона';
+  return {
+    tone: 'neutral',
+    label: 'Стабильная зона',
+    hint: 'Поддерживайте текущий уровень вовлеченности.',
+  };
 }
 
 function formatTrend(value) {
