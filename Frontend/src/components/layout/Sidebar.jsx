@@ -14,6 +14,7 @@ import {
   FiCheck,
   FiLayers,
   FiUserCheck,
+  FiGitBranch,
 } from 'react-icons/fi';
 import { getGoals, getTasks, updateTask } from '../../api/services';
 import { useAuth } from '../../contexts/AuthContext';
@@ -158,6 +159,7 @@ const Sidebar = () => {
   if (isAdmin) {
     navItems.splice(1, 0, { path: '/admin/users', icon: FiUserPlus, label: 'Сотрудники' });
     navItems.splice(2, 0, { path: '/admin/departments', icon: FiLayers, label: 'Отделы' });
+    navItems.splice(3, 0, { path: '/admin/teams', icon: FiGitBranch, label: 'Команды' });
   }
 
   return (

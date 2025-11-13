@@ -15,6 +15,7 @@ import Team from './components/Team';
 import Reports from './components/Reports';
 import AdminUsers from './components/AdminUsers';
 import AdminDepartments from './components/AdminDepartments';
+import AdminTeams from './components/AdminTeams';
 import SkillReview from './components/reviews/SkillReview';
 import TaskReview from './components/reviews/TaskReview';
 import './App.css';
@@ -193,6 +194,14 @@ function App() {
               element={
                 <PrivateRoute requireAdmin>
                   <AdminDepartments />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/teams"
+              element={
+                <PrivateRoute requireAdmin>
+                  <AdminTeams />
                 </PrivateRoute>
               }
             />

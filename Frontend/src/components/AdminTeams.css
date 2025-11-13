@@ -1,0 +1,341 @@
+.admin-teams-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 32px;
+}
+
+.admin-teams-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-actions .ghost,
+.header-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.header-actions .ghost {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.header-actions .ghost:hover {
+  background: var(--bg-hover);
+}
+
+.header-actions .primary {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.header-actions .primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.filters-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.input-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  min-height: 44px;
+}
+
+.input-with-icon input {
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.filters-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.page-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.page-banner.error {
+  background: var(--danger-surface);
+  color: var(--color-error);
+}
+
+.page-banner.success {
+  background: var(--success-surface);
+  color: var(--color-success);
+}
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.team-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.team-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.team-card strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.team-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.card-actions .ghost,
+.card-actions .danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.card-actions .ghost {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.card-actions .ghost:hover {
+  background: var(--bg-hover);
+}
+
+.card-actions .danger {
+  background: var(--danger-surface);
+  color: var(--color-error);
+  border-color: var(--danger-outline);
+}
+
+.team-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.team-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.team-card footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel.placeholder,
+.panel.empty {
+  grid-column: 1 / -1;
+  background: var(--card-bg);
+  border: 1px dashed var(--border-color);
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.panel.empty {
+  color: var(--text-tertiary);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--card-bg);
+  border-radius: 20px;
+  width: min(640px, 100%);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.modal-header .icon {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+}
+
+.modal-body {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.modal-body .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.modal-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.modal-body input,
+.modal-body select,
+.modal-body textarea {
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.modal-body textarea {
+  resize: vertical;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-actions .ghost,
+.modal-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.modal-actions .ghost {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.modal-actions .ghost:hover {
+  background: var(--bg-hover);
+}
+
+.modal-actions .primary {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+@media (max-width: 960px) {
+  .admin-teams-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .teams-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .header-actions {
+    flex-wrap: wrap;
+  }
+}
