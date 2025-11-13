@@ -7,7 +7,7 @@ import NotificationBell from './NotificationBell';
 import { IconMoon, IconSun, IconUser, IconLogout } from './Icons';
 import './Header.css';
 
-const Header = () => {
+const Header = ({ onMenuToggle }) => {
   const [showProfile, setShowProfile] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { user, employee, signOut } = useAuth();
@@ -29,6 +29,12 @@ const Header = () => {
   return (
     <header className="header">
       <div className="header-content">
+        <button className="mobile-menu-btn" onClick={onMenuToggle} aria-label="Меню">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
+        </button>
+        
         <div className="brand-block">
           <div className="brand-mark">RV</div>
           <div className="brand-meta">
@@ -44,7 +50,12 @@ const Header = () => {
             className="icon-btn"
             title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
           >
-            {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+            {theme === 'dark' ? (
+              <IconSun size={18} />
+            ) : (
+              <IconMoon size={18} />
+            )}
+            {!theme && <span style={{fontSize: '18px'}}>🌓</span>}
           </button>
 
           <div className="profile-menu-wrapper">

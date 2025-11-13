@@ -620,6 +620,21 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .expand-btn {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+  }
+
+  .goal-info {
+    padding-right: 2.5rem;
+  }
+
+  .goal-info h3 {
+    font-size: 1rem;
   }
 
   .goal-meta {
@@ -635,7 +650,7 @@
   }
 
   .participant-chip {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     padding: 0.3rem 0.65rem;
   }
 
@@ -644,13 +659,43 @@
     align-items: flex-start;
   }
 
+  .date-item {
+    font-size: 0.8rem;
+  }
+
   .goal-progress {
     width: 100%;
     text-align: left;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
   }
 
   .goal-content {
-    padding: 0.75rem 1rem 1rem 1.5rem;
+    padding: 0.75rem 1rem 1rem 1rem;
+  }
+
+  .goal-description h4 {
+    font-size: 0.9rem;
+  }
+
+  .tasks-section {
+    padding: 0.75rem;
+  }
+
+  .task-form {
+    padding: 0.75rem;
+  }
+
+  .task-item {
+    padding: 0.65rem;
+  }
+
+  .task-content strong {
+    font-size: 0.9rem;
+  }
+
+  .task-content span {
+    font-size: 0.8rem;
   }
 
   .participant-candidates {
@@ -659,6 +704,85 @@
 
   .selected-chip {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .participant-picker {
+    padding: 0.75rem;
+  }
+
+  .category-section {
+    margin-bottom: 2rem;
+  }
+
+  .category-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-footer {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .goal-header {
+    padding: 0.75rem;
+  }
+
+  .goal-info h3 {
+    font-size: 0.95rem;
+  }
+
+  .goal-content {
+    padding: 0.5rem 0.75rem 0.75rem 0.75rem;
+  }
+
+  .participant-chip {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.55rem;
+  }
+
+  .tasks-section {
+    padding: 0.65rem;
+  }
+
+  .task-form {
+    padding: 0.65rem;
+  }
+
+  .task-form input,\n  .task-form textarea {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.85rem;
+  }
+
+  .task-item {
+    padding: 0.55rem;
+  }
+
+  .task-content strong {
+    font-size: 0.85rem;
+  }
+
+  .task-content span {
+    font-size: 0.75rem;
+  }
+
+  .category-header h2 {
+    font-size: 1.15rem;
   }
 }
 

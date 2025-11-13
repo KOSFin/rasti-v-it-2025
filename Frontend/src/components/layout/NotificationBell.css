@@ -174,3 +174,64 @@
     transform: translateY(0);
   }
 }
+
+@media (max-width: 768px) {
+  .notification-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .notification-button svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .notification-badge {
+    right: -4px;
+    min-width: 16px;
+    padding: 1px 4px;
+    font-size: 10px;
+  }
+
+  .notification-dropdown {
+    width: calc(100vw - 24px);
+    max-width: 340px;
+    right: -12px;
+  }
+
+  .notification-header h4 {
+    font-size: 15px;
+  }
+
+  .notification-list {
+    max-height: 280px;
+  }
+
+  .notification-item {
+    padding: 8px 10px;
+  }
+
+  .notification-title {
+    font-size: 13px;
+  }
+
+  .notification-message {
+    font-size: 12px;
+  }
+
+  .mark-all {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-dropdown {
+    width: calc(100vw - 16px);
+    padding: 14px;
+  }
+
+  .notification-list {
+    max-height: 240px;
+  }
+}

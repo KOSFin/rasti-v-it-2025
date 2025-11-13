@@ -185,6 +185,10 @@
 }
 
 @media (max-width: 768px) {
+  .colleagues-page {
+    gap: 1.25rem;
+  }
+
   .page-header {
     flex-direction: column;
     align-items: flex-start;
@@ -201,9 +205,53 @@
 
   .profile-grid {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .profile-item {
+    padding: 0.75rem 0.85rem;
   }
 
   .colleagues-grid {
     grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .colleague-card {
+    padding: 0.85rem;
+  }
+
+  .colleague-meta {
+    gap: 0.4rem;
+  }
+
+  .colleague-meta li {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .colleagues-page {
+    gap: 1rem;
+  }
+
+  .profile-card {
+    gap: 1rem;
+  }
+
+  .profile-item {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .colleague-card {
+    padding: 0.75rem;
+  }
+
+  .colleague-header strong {
+    font-size: 0.95rem;
+  }
+
+  .colleague-header span {
+    font-size: 0.78rem;
   }
 }

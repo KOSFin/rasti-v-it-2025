@@ -540,3 +540,115 @@
     max-width: 200px;
   }
 }
+
+@media (max-width: 768px) {
+  .page-tabs {
+    width: 100%;
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  .page-tab {
+    padding: 6px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .manager-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .manager-summary-card {
+    padding: 12px 14px;
+  }
+
+  .manager-summary-card .value {
+    font-size: 18px;
+  }
+
+  .skill-assessment-table {
+    font-size: 12px;
+  }
+
+  .skill-assessment-table th,
+  .skill-assessment-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .skill-assessment-table .feedback-cell {
+    max-width: 150px;
+  }
+
+  .reputation-overview,
+  .reputation-chart,
+  .score-trend-section {
+    padding: 16px;
+  }
+
+  .reputation-overview .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .score-trend-chart {
+    min-height: 220px;
+  }
+
+  .insights-list {
+    grid-template-columns: 1fr;
+  }
+
+  .recommendations-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    width: 95vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .manager-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .manager-summary-card {
+    padding: 10px 12px;
+  }
+
+  .manager-summary-card .value {
+    font-size: 16px;
+  }
+
+  .skill-assessment-table th,
+  .skill-assessment-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .reputation-overview,
+  .reputation-chart,
+  .score-trend-section {
+    padding: 12px;
+  }
+
+  .insight-card.detailed {
+    padding: 14px 16px;
+  }
+
+  .modal-header,
+  .modal-footer,
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

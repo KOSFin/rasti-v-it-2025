@@ -216,19 +216,20 @@
 
 .matrix-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
 .matrix-cell {
   border-radius: 16px;
-  padding: 16px;
+  padding: 14px;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 180px;
+  overflow: hidden;
 }
 
 .matrix-cell.high-high {
@@ -271,27 +272,43 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .cell-subtitle {
   font-size: 12px;
   color: var(--text-secondary);
+  word-wrap: break-word;
 }
 
 .cell-count {
   font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
+  flex-shrink: 0;
 }
 
 .cell-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.cell-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cell-body::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
 }
 
 .cell-body ul {
   list-style: none;
   margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -305,22 +322,30 @@
   border-radius: 12px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .cell-body li strong {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-primary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.3;
 }
 
 .cell-body li span {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .metrics {
   font-family: 'Roboto Mono', Consolas, monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-tertiary);
+  word-wrap: break-word;
 }
 
 .cell-empty {
@@ -460,6 +485,21 @@
   line-height: 1.35;
 }
 
+@media (max-width: 1200px) {
+  .nine-box-grid {
+    gap: 10px;
+  }
+
+  .matrix-row {
+    gap: 10px;
+  }
+
+  .matrix-cell {
+    min-height: 160px;
+    padding: 12px;
+  }
+}
+
 @media (max-width: 1024px) {
   .matrix-row {
     grid-template-columns: 1fr;
@@ -474,15 +514,147 @@
     text-align: right;
     margin-top: 12px;
   }
+
+  .matrix-cell {
+    min-height: auto;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
+  .nine-box-page {
+    gap: 20px;
+  }
+
   .page-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .page-subtitle {
+    font-size: 13px;
   }
 
   .page-actions {
+    width: 100%;
     flex-wrap: wrap;
+  }
+
+  .input-with-icon {
+    width: 100%;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 14px;
+  }
+
+  .summary-card .value {
+    font-size: 22px;
+  }
+
+  .panel {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .matrix-wrapper {
+    padding: 12px;
+  }
+
+  .nine-box-grid {
+    gap: 8px;
+  }
+
+  .matrix-row {
+    gap: 8px;
+  }
+
+  .matrix-cell {
+    padding: 10px;
+    min-height: 140px;
+  }
+
+  .cell-header {
+    gap: 8px;
+  }
+
+  .cell-title {
+    font-size: 13px;
+  }
+
+  .cell-subtitle {
+    font-size: 11px;
+  }
+
+  .cell-count {
+    font-size: 14px;
+  }
+
+  .cell-body li {
+    padding: 8px;
+  }
+
+  .cell-body li strong {
+    font-size: 12px;
+  }
+
+  .cell-body li span {
+    font-size: 10px;
+  }
+
+  .legend-panel .legend-list {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-card {
+    padding: 14px;
+  }
+
+  .chart-panel .chart-wrapper {
+    height: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  .summary-card .value {
+    font-size: 20px;
+  }
+
+  .matrix-cell {
+    padding: 8px;
+    min-height: 120px;
+  }
+
+  .cell-title {
+    font-size: 12px;
+  }
+
+  .cell-count {
+    font-size: 13px;
+  }
+
+  .panel {
+    padding: 12px;
   }
 }

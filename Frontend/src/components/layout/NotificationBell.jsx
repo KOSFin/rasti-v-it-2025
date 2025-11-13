@@ -64,6 +64,7 @@ const NotificationBell = () => {
         className={`notification-button ${open ? 'active' : ''}`}
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Уведомления"
+        title="Уведомления"
       >
         <IconBell size={18} />
         {totalUnread > 0 && <span className="notification-badge">{Math.min(totalUnread, 9)}{totalUnread > 9 ? '+' : ''}</span>}

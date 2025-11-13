@@ -686,23 +686,168 @@
   border-radius: 14px;
 }
 
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  .insights-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
 @media (max-width: 992px) {
   .hero-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .insights-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
+  .dashboard-page {
+    gap: 18px;
+  }
+
   .dashboard-hero {
-    padding: 20px;
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .hero-top {
+    gap: 16px;
+  }
+
+  .filters {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .filter-group {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filters select {
+    width: 100%;
+    min-width: auto;
   }
 
   .hero-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .hero-metrics div {
+    padding: 12px;
+  }
+
+  .metric-label {
+    font-size: 11px;
+  }
+
+  .metric-value {
+    font-size: 20px;
+  }
+
+  .metric-hint {
+    font-size: 11px;
+  }
+
+  .summary-strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 14px;
+  }
+
+  .summary-main {
+    font-size: 20px;
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .insight-card {
+    padding: 14px 16px;
+  }
+
+  .insight-number {
+    font-size: 24px;
   }
 
   .dashboard-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .dashboard-panel {
+    padding: 16px 18px;
+  }
+
+  .panel-header h2 {
+    font-size: 16px;
+  }
+
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .talent-list li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .recommendation-list li {
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-hero {
+    padding: 12px;
+  }
+
+  .hero-metrics {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .metric-value {
+    font-size: 18px;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .insight-card {
+    padding: 12px 14px;
+  }
+
+  .insight-number {
+    font-size: 22px;
+  }
+
+  .dashboard-panel {
+    padding: 14px 16px;
+  }
+
+  .filter {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 }
 
