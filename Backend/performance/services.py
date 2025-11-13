@@ -809,10 +809,10 @@ def fetch_skill_form(token: str) -> Dict:
     questions_by_category: Dict[int, Dict] = {}
 
     for question in questions:
-            answer_value = {}
-            if answer_obj and answer_obj.answer_value:
-                answer_value = answer_obj.answer_value
-        answer_value = answer_obj.answer_value if answer_obj else {}
+        answer_obj = existing_answers.get(question.id)
+        answer_value: Dict = {}
+        if answer_obj and answer_obj.answer_value:
+            answer_value = answer_obj.answer_value
         question_entry = {
             "id": question.id,
             "question": question.question_text,
