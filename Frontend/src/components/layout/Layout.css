@@ -22,6 +22,7 @@ body.no-scroll {
   background-color: var(--bg-primary);
   padding: 24px;
   transition: transform 0.3s ease;
+  height: calc(100vh - 72px);
 }
 
 .mobile-menu-overlay {
