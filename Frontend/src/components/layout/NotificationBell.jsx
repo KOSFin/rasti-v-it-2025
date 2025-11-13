@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiBell, FiCheckCircle } from 'react-icons/fi';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { IconBell, IconCheckCircle } from './Icons';
 import './NotificationBell.css';
 
 const NotificationBell = () => {
@@ -65,7 +65,7 @@ const NotificationBell = () => {
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Уведомления"
       >
-        <FiBell size={18} />
+        <IconBell size={18} />
         {totalUnread > 0 && <span className="notification-badge">{Math.min(totalUnread, 9)}{totalUnread > 9 ? '+' : ''}</span>}
       </button>
 
@@ -78,7 +78,7 @@ const NotificationBell = () => {
             </div>
             {hasNotifications && totalUnread > 0 && (
               <button type="button" className="mark-all" onClick={markAllAsRead}>
-                <FiCheckCircle size={14} />
+                <IconCheckCircle size={14} />
                 <span>Отметить все</span>
               </button>
             )}

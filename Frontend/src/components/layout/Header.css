@@ -70,6 +70,11 @@
   transition: all 0.25s ease;
 }
 
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .icon-btn:hover {
   color: var(--color-accent);
   background-color: var(--bg-tertiary);
@@ -104,6 +109,11 @@
   align-items: center;
   justify-content: center;
   font-weight: 600;
+}
+
+.profile-avatar svg {
+  width: 18px;
+  height: 18px;
 }
 
 .profile-context {

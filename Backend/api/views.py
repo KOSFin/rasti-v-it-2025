@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Q, Avg, Count
+from django.db.models import Q, Avg, Count, Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -1301,32 +1301,70 @@ class FinalReviewViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        user = self.request.user
+        user = request.user
         employee = Employee.objects.filter(user=user).select_related('department').first()
 
+        employee_queryset = Employee.objects.select_related('department').all()
+
         if user.is_superuser:
-            reviews = FinalReview.objects.all()
+            scoped_employees = employee_queryset
         elif not employee:
             return Response({}, status=status.HTTP_200_OK)
         elif employee.has_global_visibility():
-            reviews = FinalReview.objects.all()
+            scoped_employees = employee_queryset
         elif employee.has_leadership_scope:
             visible_ids = employee.visible_employee_ids()
-            reviews = FinalReview.objects.filter(employee_id__in=visible_ids)
+            scoped_employees = employee_queryset.filter(id__in=visible_ids)
         else:
             return Response(
                 {'error': 'Статистика доступна только руководителям и пользователям с расширенными правами.'},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
+        employee_ids = scoped_employees.values_list('id', flat=True)
+        reviews = FinalReview.objects.filter(employee_id__in=employee_ids)
+
+        aggregates = reviews.aggregate(
+            total=Count('id'),
+            average=Avg('total_score'),
+            unique_employees=Count('employee', distinct=True),
+            last_created=Max('created_at'),
+        )
+
+        salary_breakdown = {
+            'include': reviews.filter(salary_recommendation='include').count(),
+            'conditional': reviews.filter(salary_recommendation='conditional').count(),
+            'exclude': reviews.filter(salary_recommendation='exclude').count(),
+        }
+
+        period_breakdown = list(
+            reviews
+            .values('review_period')
+            .annotate(total=Count('id'))
+            .order_by('-total', '-review_period')[:5]
+        )
+
+        department_breakdown = list(
+            reviews
+            .values('employee__department_id', 'employee__department__name')
+            .annotate(
+                total=Count('id'),
+                employees=Count('employee', distinct=True),
+            )
+            .order_by('-total')[:5]
+        )
+
+        for item in department_breakdown:
+            item['employee__department__name'] = item['employee__department__name'] or 'Без отдела'
+
         stats = {
-            'total_reviews': reviews.count(),
-            'average_score': reviews.aggregate(Avg('total_score'))['total_score__avg'] or 0,
-            'salary_recommendations': {
-                'include': reviews.filter(salary_recommendation='include').count(),
-                'conditional': reviews.filter(salary_recommendation='conditional').count(),
-                'exclude': reviews.filter(salary_recommendation='exclude').count(),
-            }
+            'total_reviews': aggregates['total'] or 0,
+            'average_score': aggregates['average'] or 0,
+            'unique_employees': aggregates['unique_employees'] or 0,
+            'last_submitted_at': aggregates['last_created'],
+            'salary_recommendations': salary_breakdown,
+            'top_periods': period_breakdown,
+            'top_departments': department_breakdown,
         }
 
         return Response(stats)

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiUser, FiLogOut, FiMoon, FiSun } from 'react-icons/fi';
 import { logout } from '../../api/services';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
+import { IconMoon, IconSun, IconUser, IconLogout } from './Icons';
 import './Header.css';
 
 const Header = () => {
@@ -44,7 +44,7 @@ const Header = () => {
             className="icon-btn"
             title={theme === 'dark' ? 'Светлая тема' : 'Темная тема'}
           >
-            {theme === 'dark' ? <FiSun size={18} /> : <FiMoon size={18} />}
+            {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
           </button>
 
           <div className="profile-menu-wrapper">
@@ -55,7 +55,7 @@ const Header = () => {
               aria-expanded={showProfile}
             >
               <div className="profile-avatar">
-                {initials || <FiUser size={18} />}
+                {initials || <IconUser size={18} />}
               </div>
               <div className="profile-context">
                 <span className="profile-name">
@@ -90,7 +90,7 @@ const Header = () => {
                   </div>
                 )}
                 <button onClick={handleLogout} className="logout-btn">
-                  <FiLogOut size={16} />
+                  <IconLogout size={16} />
                   <span>Выйти из системы</span>
                 </button>
               </div>

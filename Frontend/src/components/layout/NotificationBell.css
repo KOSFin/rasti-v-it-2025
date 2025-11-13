@@ -15,6 +15,11 @@
   transition: all 0.25s ease;
 }
 
+.notification-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .notification-button:hover,
 .notification-button.active {
   color: var(--color-accent);
@@ -147,6 +152,11 @@
   font-size: 12px;
   font-weight: 600;
   transition: all 0.2s ease;
+}
+
+.mark-all svg {
+  width: 14px;
+  height: 14px;
 }
 
 .mark-all:hover {

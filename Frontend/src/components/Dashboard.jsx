@@ -352,10 +352,16 @@ function AdminDashboard({ user }) {
     teams: null,
   });
   const [finalStats, setFinalStats] = useState(null);
-  const [nineBox, setNineBox] = useState({ entries: [], summary: summarizeNineBox([]) });
+  const [nineBox, setNineBox] = useState({
+    entries: [],
+    summary: summarizeNineBox([]),
+    stats: null,
+    recommendations: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshIndex, setRefreshIndex] = useState(0);
+  const [reviewTrends, setReviewTrends] = useState({ periods: [], departments: [] });
 
   useEffect(() => {
     let ignore = false;
@@ -409,8 +415,20 @@ function AdminDashboard({ user }) {
           teams: teamsCount,
         });
         setFinalStats(finalStatsResponse);
-        const entries = Array.isArray(nineBoxResponse) ? nineBoxResponse : [];
-        setNineBox({ entries, summary: summarizeNineBox(entries) });
+        if (finalStatsResponse) {
+          setReviewTrends({
+            periods: Array.isArray(finalStatsResponse.top_periods) ? finalStatsResponse.top_periods : [],
+            departments: Array.isArray(finalStatsResponse.top_departments) ? finalStatsResponse.top_departments : [],
+          });
+        } else {
+          setReviewTrends({ periods: [], departments: [] });
+        }
+
+        const entries = Array.isArray(nineBoxResponse.matrix) ? nineBoxResponse.matrix : Array.isArray(nineBoxResponse) ? nineBoxResponse : [];
+        const summary = summarizeNineBox(entries);
+        const stats = nineBoxResponse?.stats || null;
+        const recommendations = Array.isArray(nineBoxResponse?.ai_recommendations) ? nineBoxResponse.ai_recommendations.slice(0, 6) : [];
+        setNineBox({ entries, summary, stats, recommendations });
       } catch (loadError) {
         if (ignore) {
           return;
@@ -451,10 +469,15 @@ function AdminDashboard({ user }) {
       {
         label: 'Отзывов собрано',
         value: formatCountValue(finalStats?.total_reviews),
-        hint: 'Финальные обзоры в системе',
+        hint: `По ${formatCountValue(finalStats?.unique_employees)} сотрудникам`,
+      },
+      {
+        label: 'Обновлено',
+        value: formatTimestamp(finalStats?.last_submitted_at),
+        hint: 'Последний финальный обзор',
       },
     ],
-    [counts.employees, counts.managers, finalStats?.average_score, finalStats?.total_reviews],
+    [counts.employees, counts.managers, finalStats?.average_score, finalStats?.total_reviews, finalStats?.unique_employees, finalStats?.last_submitted_at],
   );
 
   const structureMetrics = useMemo(
@@ -477,7 +500,7 @@ function AdminDashboard({ user }) {
       {
         label: 'В 9-box',
         value: formatCountValue(nineBox.summary.total),
-        hint: 'Сотрудники с оценкой потенциала',
+        hint: buildNineBoxHint(nineBox.stats),
       },
     ],
     [counts.organizations, counts.departments, counts.teams, nineBox.summary.total],
@@ -505,7 +528,7 @@ function AdminDashboard({ user }) {
     () =>
       nineBox.entries
         .filter((item) => clampNineBox(item.nine_box_x) === 0 || clampNineBox(item.nine_box_y) === 0)
-        .slice(0, 5),
+        .slice(0, 8),
     [nineBox.entries],
   );
 
@@ -624,7 +647,9 @@ function AdminDashboard({ user }) {
         <div className="dashboard-panel">
           <div className="panel-header">
             <h2>Зона внимания</h2>
-            <span>{formatCountValue(attentionList.length)}</span>
+            <span>
+              {formatCountValue(attentionList.length)} из {formatCountValue(nineBox.summary.attention)}
+            </span>
           </div>
           {attentionList.length === 0 ? (
             <div className="empty">Рисковых сотрудников не обнаружено.</div>
@@ -642,7 +667,68 @@ function AdminDashboard({ user }) {
             </ul>
           )}
         </div>
+
+        <div className="dashboard-panel">
+          <div className="panel-header">
+            <h2>Рекомендации AI</h2>
+            <span>{formatCountValue(nineBox.recommendations.length)}</span>
+          </div>
+          {nineBox.recommendations.length === 0 ? (
+            <div className="empty">Фокусных рекомендаций нет. Проведите оценку, чтобы получить инсайты.</div>
+          ) : (
+            <ul className="recommendation-list">
+              {nineBox.recommendations.map((rec) => (
+                <li key={`${rec.employee_id}-${rec.title}`}>
+                  <header>
+                    <strong>{rec.employee_name}</strong>
+                    <span className={`priority ${rec.priority}`}>{priorityLabel(rec.priority)}</span>
+                  </header>
+                  <p className="title">{rec.title}</p>
+                  <p className="description">{rec.description}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
+
+      {finalStats && (reviewTrends.periods.length > 0 || reviewTrends.departments.length > 0) && (
+        <section className="dashboard-grid trends">
+          {reviewTrends.periods.length > 0 && (
+            <div className="dashboard-panel">
+              <div className="panel-header">
+                <h2>Топ периодов</h2>
+                <span>{reviewTrends.periods.length}</span>
+              </div>
+              <ul className="trend-list">
+                {reviewTrends.periods.map((period) => (
+                  <li key={period.review_period}>
+                    <span>{period.review_period}</span>
+                    <strong>{formatCountValue(period.total)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {reviewTrends.departments.length > 0 && (
+            <div className="dashboard-panel">
+              <div className="panel-header">
+                <h2>Топ отделов</h2>
+                <span>{reviewTrends.departments.length}</span>
+              </div>
+              <ul className="trend-list">
+                {reviewTrends.departments.map((department) => (
+                  <li key={department.employee__department_id || 'none'}>
+                    <span>{department.employee__department__name}</span>
+                    <strong>{formatCountValue(department.total)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -753,6 +839,40 @@ function formatTrend(value) {
   }
   const signed = value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1);
   return `${signed}`;
+}
+
+function formatTimestamp(value) {
+  if (!value) {
+    return '—';
+  }
+  try {
+    return new Date(value).toLocaleDateString('ru-RU');
+  } catch (error) {
+    return '—';
+  }
+}
+
+function buildNineBoxHint(stats) {
+  if (!stats) {
+    return 'Сотрудники с оценкой потенциала';
+  }
+
+  const { average_performance: perf, average_potential: potential } = stats;
+  if (typeof perf === 'number' && typeof potential === 'number') {
+    return `Σ > ${perf.toFixed(1)}% performance · ${potential.toFixed(1)}% potential`;
+  }
+  return 'Сотрудники с оценкой потенциала';
+}
+
+function priorityLabel(priority) {
+  switch (priority) {
+    case 'high':
+      return 'Высокий приоритет';
+    case 'low':
+      return 'Низкий приоритет';
+    default:
+      return 'Средний приоритет';
+  }
 }
 
 function statusLabel(status) {
