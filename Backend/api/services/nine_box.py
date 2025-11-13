@@ -480,4 +480,3 @@ def generate_snapshot(
     dataset['valid_until'] = snapshot.valid_until
     dataset['source'] = source.value if hasattr(source, 'value') else str(source)
     return snapshot, dataset
-*** End File
